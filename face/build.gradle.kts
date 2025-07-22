@@ -75,11 +75,36 @@ afterEvaluate {
     publishing {
         publications {
             create<MavenPublication>("release") {
-                group = "com.lee.face"
-                artifactId = "face"
-                version = "0.0.4"
+                // 使用 components 而不是手动指定 artifact
+                from(components["release"])
 
-                afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
+                groupId = "com.lee.face"
+                artifactId = "face"
+                version = "0.0.5" // 增加版本号
+
+                // 添加 POM 信息
+                pom {
+                    name.set("Face Recognition Library")
+                    description.set("Android face recognition library")
+
+                    // 确保包含依赖信息
+                    withXml {
+                        val dependenciesNode = asNode().appendNode("dependencies")
+
+                        // 手动添加关键依赖
+                        val tensorflowDep = dependenciesNode.appendNode("dependency")
+                        tensorflowDep.appendNode("groupId", "org.tensorflow")
+                        tensorflowDep.appendNode("artifactId", "tensorflow-lite")
+                        tensorflowDep.appendNode("version", "2.17.0")
+                        tensorflowDep.appendNode("scope", "compile")
+
+                        val faceDetectionDep = dependenciesNode.appendNode("dependency")
+                        faceDetectionDep.appendNode("groupId", "com.google.mlkit")
+                        faceDetectionDep.appendNode("artifactId", "face-detection")
+                        faceDetectionDep.appendNode("version", "16.1.7")
+                        faceDetectionDep.appendNode("scope", "compile")
+                    }
+                }
             }
         }
     }
