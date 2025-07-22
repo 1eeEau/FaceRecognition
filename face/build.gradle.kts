@@ -77,7 +77,7 @@ afterEvaluate {
             create<MavenPublication>("release") {
                 group = "com.lee.face"
                 artifactId = "face"
-                version = "0.0.2"
+                version = "0.0.4"
 
                 afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
             }
