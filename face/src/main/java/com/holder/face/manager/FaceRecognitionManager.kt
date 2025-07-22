@@ -151,7 +151,10 @@ class FaceRecognitionManager private constructor(
                     )
                 } catch (e: Exception) {
                     if (config.enableDebugLog) {
-                        Log.w("FaceRecognitionManager", "图片转Base64失败，将不保存图片: ${e.message}")
+                        Log.w(
+                            "FaceRecognitionManager",
+                            "图片转Base64失败，将不保存图片: ${e.message}"
+                        )
                     }
                     null
                 }
@@ -213,24 +216,38 @@ class FaceRecognitionManager private constructor(
                         System.currentTimeMillis() - startTime
                     )
                 }
-
-                detectionResult.faces.size > 1 -> {
-                    return RecognitionResult.multipleFacesDetected(
-                        detectionResult.faces.size,
-                        System.currentTimeMillis() - startTime
-                    )
-                }
             }
 
-            val detectedFace = detectionResult.faces.first()
+            // 2. 选择最佳人脸（如果有多个人脸，选择占比最大且质量最好的）
+            val detectedFace = if (detectionResult.faces.size == 1) {
+                detectionResult.faces.first()
+            } else {
+                // 综合考虑人脸大小选择最佳人脸
+                val bestFace = detectionResult.faces.maxByOrNull { face ->
+                    (face.boundingBox.width() * face.boundingBox.height()).toFloat()
+                }
 
-            // 2. 裁剪人脸区域
+                if (config.enableDebugLog) {
+                    Log.i(
+                        "FaceRecognitionManager",
+                        "检测到${detectionResult.faces.size}个人脸，选择最佳人脸进行识别"
+                    )
+                    Log.i(
+                        "FaceRecognitionManager",
+                        "选中人脸大小: ${bestFace?.getFaceSize()}, 质量: ${bestFace?.isGoodQuality()}"
+                    )
+                }
+
+                bestFace!!
+            }
+
+            // 3. 裁剪人脸区域
             val faceBitmap = ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
 
-            // 3. 提取特征
+            // 4. 提取特征
             val queryVector = featureExtractor.extractFeatures(faceBitmap, "query")
 
-            // 4. 获取所有已注册的人脸
+            // 5. 获取所有已注册的人脸
             val registeredFaces = faceRepository.getAllEnabledFaces()
 
             if (registeredFaces.isEmpty()) {
@@ -240,7 +257,7 @@ class FaceRecognitionManager private constructor(
                 )
             }
 
-            // 5. 人脸比较
+            // 6. 人脸比较
             val bestMatch = faceComparator.findBestMatch(queryVector, registeredFaces)
 
             val processingTime = System.currentTimeMillis() - startTime
@@ -254,7 +271,8 @@ class FaceRecognitionManager private constructor(
                         "distance" to bestMatch.distance,
                         "method" to bestMatch.method,
                         "faceSize" to detectedFace.getFaceSize(),
-                        "registeredCount" to registeredFaces.size
+                        "registeredCount" to registeredFaces.size,
+                        "detectedFaceCount" to detectionResult.faces.size
                     )
                 )
             } else {
@@ -263,7 +281,8 @@ class FaceRecognitionManager private constructor(
                     extras = mapOf(
                         "bestSimilarity" to (bestMatch?.similarity ?: 0f),
                         "threshold" to config.recognitionThreshold,
-                        "registeredCount" to registeredFaces.size
+                        "registeredCount" to registeredFaces.size,
+                        "detectedFaceCount" to detectionResult.faces.size
                     )
                 )
             }

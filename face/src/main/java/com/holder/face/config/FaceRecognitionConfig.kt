@@ -39,11 +39,11 @@ data class FaceRecognitionConfig(
     companion object {
         // 默认配置常量
         const val DEFAULT_MAX_FACE_COUNT = 50
-        const val DEFAULT_RECOGNITION_THRESHOLD = 0.8f
+        const val DEFAULT_RECOGNITION_THRESHOLD = 0.85f
         const val DEFAULT_FEATURE_VECTOR_DIMENSION = 512
-        const val DEFAULT_MIN_FACE_SIZE = 50
-        const val DEFAULT_MAX_FACE_SIZE = 1000
-        const val DEFAULT_FACE_DETECTION_CONFIDENCE = 0.7f
+        const val DEFAULT_MIN_FACE_SIZE = 80
+        const val DEFAULT_MAX_FACE_SIZE = 800
+        const val DEFAULT_FACE_DETECTION_CONFIDENCE = 0.8f
         const val DEFAULT_DATABASE_NAME = "face_recognition.db"
         const val DEFAULT_MODEL_FILE_NAME = "MobileFaceNet.tflite"
         
