@@ -6,6 +6,7 @@ import android.util.Base64
 import android.util.Log
 import com.holder.face.exception.FaceRecognitionException
 import java.io.ByteArrayOutputStream
+import androidx.core.graphics.scale
 
 /**
  * 图片Base64编码工具类
@@ -124,7 +125,7 @@ object ImageBase64Utils {
         
         Log.d(TAG, "调整图片尺寸: ${width}x${height} -> ${newWidth}x${newHeight}")
         
-        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        return bitmap.scale(newWidth, newHeight)
     }
     
     /**
