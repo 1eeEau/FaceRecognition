@@ -12,7 +12,7 @@ import com.holder.face.model.FaceEntity
  */
 @Database(
     entities = [FaceEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -70,12 +70,12 @@ abstract class FaceDatabase : RoomDatabase() {
         }
         
         /**
-         * 数据库迁移 (示例，从版本1到版本2)
+         * 数据库迁移 (从版本1到版本2 - 添加人脸图片字段)
          */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // 示例迁移：添加新字段
-                // database.execSQL("ALTER TABLE face_vectors ADD COLUMN new_field TEXT")
+                // 添加人脸图片Base64字段
+                database.execSQL("ALTER TABLE face_vectors ADD COLUMN face_image_base64 TEXT")
             }
         }
     }

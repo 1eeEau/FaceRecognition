@@ -56,7 +56,11 @@ data class FaceEntity(
     
     /** 版本号 (用于数据同步) */
     @ColumnInfo(name = "version")
-    val version: Int = 1
+    val version: Int = 1,
+
+    /** 人脸图片Base64编码 (可选) */
+    @ColumnInfo(name = "face_image_base64")
+    val faceImageBase64: String? = null
 ) {
     
     companion object {
@@ -66,7 +70,8 @@ data class FaceEntity(
         fun fromFaceVector(
             faceVector: FaceVector,
             remarks: String? = null,
-            isEnabled: Boolean = true
+            isEnabled: Boolean = true,
+            faceImageBase64: String? = null
         ): FaceEntity {
             return FaceEntity(
                 personId = faceVector.personId,
@@ -76,7 +81,8 @@ data class FaceEntity(
                 updatedTime = Date(),
                 confidence = faceVector.confidence,
                 remarks = remarks,
-                isEnabled = isEnabled
+                isEnabled = isEnabled,
+                faceImageBase64 = faceImageBase64
             )
         }
     }
@@ -126,6 +132,17 @@ data class FaceEntity(
             version = version + 1
         )
     }
+
+    /**
+     * 更新人脸图片
+     */
+    fun updateFaceImage(newImageBase64: String?): FaceEntity {
+        return copy(
+            faceImageBase64 = newImageBase64,
+            updatedTime = Date(),
+            version = version + 1
+        )
+    }
     
     /**
      * 检查数据是否有效
@@ -141,10 +158,29 @@ data class FaceEntity(
      * 获取存储大小 (字节)
      */
     fun getStorageSize(): Int {
-        return vectorData.size + 
-                personId.toByteArray().size + 
-                (remarks?.toByteArray()?.size ?: 0) + 
+        return vectorData.size +
+                personId.toByteArray().size +
+                (remarks?.toByteArray()?.size ?: 0) +
+                (faceImageBase64?.toByteArray()?.size ?: 0) +
                 64 // 其他字段的大概大小
+    }
+
+    /**
+     * 检查是否有人脸图片
+     */
+    fun hasFaceImage(): Boolean {
+        return !faceImageBase64.isNullOrBlank()
+    }
+
+    /**
+     * 获取人脸图片大小估算 (KB)
+     */
+    fun getFaceImageSizeKB(): Int {
+        return if (hasFaceImage()) {
+            (faceImageBase64!!.length * 3 / 4) / 1024 // Base64解码后的大概大小
+        } else {
+            0
+        }
     }
     
     override fun equals(other: Any?): Boolean {
@@ -163,6 +199,7 @@ data class FaceEntity(
         if (remarks != other.remarks) return false
         if (isEnabled != other.isEnabled) return false
         if (version != other.version) return false
+        if (faceImageBase64 != other.faceImageBase64) return false
         
         return true
     }
@@ -178,12 +215,14 @@ data class FaceEntity(
         result = 31 * result + (remarks?.hashCode() ?: 0)
         result = 31 * result + isEnabled.hashCode()
         result = 31 * result + version
+        result = 31 * result + (faceImageBase64?.hashCode() ?: 0)
         return result
     }
     
     override fun toString(): String {
         return "FaceEntity(id=$id, personId='$personId', vectorDimension=$vectorDimension, " +
                 "createdTime=$createdTime, updatedTime=$updatedTime, confidence=$confidence, " +
-                "remarks=$remarks, isEnabled=$isEnabled, version=$version)"
+                "remarks=$remarks, isEnabled=$isEnabled, version=$version, " +
+                "hasFaceImage=${hasFaceImage()}, imageSize=${getFaceImageSizeKB()}KB)"
     }
 }

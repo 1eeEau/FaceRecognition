@@ -12,6 +12,7 @@ import com.holder.face.database.FaceRepository
 import com.holder.face.exception.FaceRecognitionException
 import com.holder.face.model.FaceVector
 import com.holder.face.model.RecognitionResult
+import com.holder.face.utils.ImageBase64Utils
 import com.holder.face.utils.ImageUtils
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
@@ -109,12 +110,14 @@ class FaceRecognitionManager private constructor(
      * @param bitmap 人脸图像
      * @param personId 人员ID (后端返回的ID)
      * @param remarks 备注信息
+     * @param saveImage 是否保存人脸图片 (默认true)
      * @return 注册结果
      */
     suspend fun registerFace(
         bitmap: Bitmap,
         personId: String,
-        remarks: String? = null
+        remarks: String? = null,
+        saveImage: Boolean = true
     ): RecognitionResult {
         ensureInitialized()
         val startTime = System.currentTimeMillis()
@@ -137,8 +140,27 @@ class FaceRecognitionManager private constructor(
             // 5. 提取特征
             val faceVector = featureExtractor.extractFeatures(faceBitmap, personId)
 
-            // 6. 存储到数据库
-            val recordId = faceRepository.addFace(faceVector, remarks)
+            // 6. 准备图片Base64 (如果需要保存)
+            val faceImageBase64 = if (saveImage) {
+                try {
+                    ImageBase64Utils.bitmapToBase64(
+                        faceBitmap,
+                        format = Bitmap.CompressFormat.JPEG,
+                        quality = 80,
+                        maxSize = 256 // 限制图片尺寸以节省存储空间
+                    )
+                } catch (e: Exception) {
+                    if (config.enableDebugLog) {
+                        Log.w("FaceRecognitionManager", "图片转Base64失败，将不保存图片: ${e.message}")
+                    }
+                    null
+                }
+            } else {
+                null
+            }
+
+            // 7. 存储到数据库
+            val recordId = faceRepository.addFace(faceVector, remarks, faceImageBase64)
 
             val processingTime = System.currentTimeMillis() - startTime
 
@@ -379,6 +401,84 @@ class FaceRecognitionManager private constructor(
     private fun ensureInitialized() {
         if (!isInitialized) {
             throw FaceRecognitionException.InitializationException("人脸识别系统未初始化，请先调用initialize()")
+        }
+    }
+
+    /**
+     * 获取人脸图片
+     * @param personId 人员ID
+     * @return 人脸图片Bitmap，如果不存在返回null
+     */
+    suspend fun getFaceImage(personId: String): Bitmap? {
+        ensureInitialized()
+        return try {
+            val base64 = faceRepository.getFaceImage(personId)
+            if (base64 != null) {
+                com.holder.face.utils.ImageBase64Utils.base64ToBitmap(base64)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.e("FaceRecognitionManager", "获取人脸图片失败: ${e.message}")
+            }
+            null
+        }
+    }
+
+    /**
+     * 更新人脸图片
+     * @param personId 人员ID
+     * @param bitmap 新的人脸图片
+     * @return 是否更新成功
+     */
+    suspend fun updateFaceImage(personId: String, bitmap: Bitmap): Boolean {
+        ensureInitialized()
+        return try {
+            val base64 = com.holder.face.utils.ImageBase64Utils.bitmapToBase64(
+                bitmap,
+                format = Bitmap.CompressFormat.JPEG,
+                quality = 80,
+                maxSize = 256
+            )
+            faceRepository.updateFaceImage(personId, base64)
+        } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.e("FaceRecognitionManager", "更新人脸图片失败: ${e.message}")
+            }
+            false
+        }
+    }
+
+    /**
+     * 删除人脸图片
+     * @param personId 人员ID
+     * @return 是否删除成功
+     */
+    suspend fun deleteFaceImage(personId: String): Boolean {
+        ensureInitialized()
+        return try {
+            faceRepository.updateFaceImage(personId, null)
+        } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.e("FaceRecognitionManager", "删除人脸图片失败: ${e.message}")
+            }
+            false
+        }
+    }
+
+    /**
+     * 获取图片存储统计信息
+     */
+    suspend fun getImageStorageStats(): FaceRepository.ImageStorageStats? {
+        ensureInitialized()
+        return try {
+            faceRepository.getImageStorageStats()
+        } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.e("FaceRecognitionManager", "获取图片存储统计失败: ${e.message}")
+            }
+            null
         }
     }
 

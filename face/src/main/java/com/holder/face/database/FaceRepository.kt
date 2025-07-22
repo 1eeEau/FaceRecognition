@@ -21,26 +21,31 @@ class FaceRepository(
      * 添加人脸数据
      * @param faceVector 人脸向量
      * @param remarks 备注信息
+     * @param faceImageBase64 人脸图片Base64编码 (可选)
      * @return 插入的记录ID
      * @throws FaceRecognitionException.StorageFullException 存储空间已满
      * @throws FaceRecognitionException.DatabaseException 数据库操作失败
      */
-    suspend fun addFace(faceVector: FaceVector, remarks: String? = null): Long {
+    suspend fun addFace(
+        faceVector: FaceVector,
+        remarks: String? = null,
+        faceImageBase64: String? = null
+    ): Long {
         try {
             // 检查存储空间
             val currentCount = faceDao.getEnabledFaceCount()
             if (currentCount >= config.maxFaceCount) {
                 throw FaceRecognitionException.StorageFullException(config.maxFaceCount)
             }
-            
+
             // 检查人员ID是否已存在
             if (faceDao.isPersonIdExists(faceVector.personId)) {
                 // 更新现有记录
-                return updateFace(faceVector, remarks)
+                return updateFace(faceVector, remarks, faceImageBase64)
             }
-            
+
             // 插入新记录
-            val faceEntity = FaceEntity.fromFaceVector(faceVector, remarks)
+            val faceEntity = FaceEntity.fromFaceVector(faceVector, remarks, true, faceImageBase64)
             return faceDao.insertFace(faceEntity)
         } catch (e: FaceRecognitionException) {
             throw e
@@ -51,15 +56,23 @@ class FaceRepository(
     
     /**
      * 批量添加人脸数据
+     * @param faceVectors 人脸向量列表
+     * @param faceImagesBase64 对应的人脸图片Base64列表 (可选，长度应与faceVectors一致)
      */
-    suspend fun addFaces(faceVectors: List<FaceVector>): List<Long> {
+    suspend fun addFaces(
+        faceVectors: List<FaceVector>,
+        faceImagesBase64: List<String?>? = null
+    ): List<Long> {
         try {
             val currentCount = faceDao.getEnabledFaceCount()
             if (currentCount + faceVectors.size > config.maxFaceCount) {
                 throw FaceRecognitionException.StorageFullException(config.maxFaceCount)
             }
-            
-            val faceEntities = faceVectors.map { FaceEntity.fromFaceVector(it) }
+
+            val faceEntities = faceVectors.mapIndexed { index, faceVector ->
+                val imageBase64 = faceImagesBase64?.getOrNull(index)
+                FaceEntity.fromFaceVector(faceVector, null, true, imageBase64)
+            }
             return faceDao.insertFaces(faceEntities)
         } catch (e: FaceRecognitionException) {
             throw e
@@ -70,13 +83,26 @@ class FaceRepository(
     
     /**
      * 更新人脸数据
+     * @param faceVector 人脸向量
+     * @param remarks 备注信息
+     * @param faceImageBase64 人脸图片Base64编码 (可选)
      */
-    suspend fun updateFace(faceVector: FaceVector, remarks: String? = null): Long {
+    suspend fun updateFace(
+        faceVector: FaceVector,
+        remarks: String? = null,
+        faceImageBase64: String? = null
+    ): Long {
         try {
             val existingFace = faceDao.getFaceByPersonId(faceVector.personId)
                 ?: throw FaceRecognitionException.FaceNotFoundException(faceVector.personId)
-            
-            val updatedFace = existingFace.updateVector(faceVector).updateRemarks(remarks)
+
+            var updatedFace = existingFace.updateVector(faceVector).updateRemarks(remarks)
+
+            // 如果提供了新的图片，也更新图片
+            if (faceImageBase64 != null) {
+                updatedFace = updatedFace.updateFaceImage(faceImageBase64)
+            }
+
             faceDao.updateFace(updatedFace)
             return updatedFace.id
         } catch (e: FaceRecognitionException) {
@@ -288,4 +314,90 @@ class FaceRepository(
             return false
         }
     }
+
+    /**
+     * 更新人脸图片
+     * @param personId 人员ID
+     * @param faceImageBase64 新的人脸图片Base64编码
+     * @return 是否更新成功
+     */
+    suspend fun updateFaceImage(personId: String, faceImageBase64: String?): Boolean {
+        try {
+            val existingFace = faceDao.getFaceByPersonId(personId)
+                ?: throw FaceRecognitionException.FaceNotFoundException(personId)
+
+            val updatedFace = existingFace.updateFaceImage(faceImageBase64)
+            faceDao.updateFace(updatedFace)
+            return true
+        } catch (e: Exception) {
+            throw FaceRecognitionException.DatabaseException("更新人脸图片失败", e)
+        }
+    }
+
+    /**
+     * 获取人脸图片
+     * @param personId 人员ID
+     * @return 人脸图片Base64编码，如果不存在返回null
+     */
+    suspend fun getFaceImage(personId: String): String? {
+        try {
+            return faceDao.getFaceByPersonId(personId)?.faceImageBase64
+        } catch (e: Exception) {
+            throw FaceRecognitionException.DatabaseException("获取人脸图片失败", e)
+        }
+    }
+
+    /**
+     * 获取所有有图片的人脸数据
+     */
+    suspend fun getFacesWithImages(): List<FaceEntity> {
+        try {
+            return faceDao.getAllEnabledFaces().filter { it.hasFaceImage() }
+        } catch (e: Exception) {
+            throw FaceRecognitionException.DatabaseException("获取有图片的人脸数据失败", e)
+        }
+    }
+
+    /**
+     * 获取没有图片的人脸数据
+     */
+    suspend fun getFacesWithoutImages(): List<FaceEntity> {
+        try {
+            return faceDao.getAllEnabledFaces().filter { !it.hasFaceImage() }
+        } catch (e: Exception) {
+            throw FaceRecognitionException.DatabaseException("获取无图片的人脸数据失败", e)
+        }
+    }
+
+    /**
+     * 统计图片存储信息
+     */
+    suspend fun getImageStorageStats(): ImageStorageStats {
+        try {
+            val allFaces = faceDao.getAllEnabledFaces()
+            val facesWithImages = allFaces.filter { it.hasFaceImage() }
+            val totalImageSize = facesWithImages.sumOf { it.getFaceImageSizeKB() }
+
+            return ImageStorageStats(
+                totalFaces = allFaces.size,
+                facesWithImages = facesWithImages.size,
+                facesWithoutImages = allFaces.size - facesWithImages.size,
+                totalImageSizeKB = totalImageSize,
+                averageImageSizeKB = if (facesWithImages.isNotEmpty()) totalImageSize / facesWithImages.size else 0
+            )
+        } catch (e: Exception) {
+            throw FaceRecognitionException.DatabaseException("获取图片存储统计失败", e)
+        }
+    }
+
+    /**
+     * 图片存储统计信息
+     */
+    data class ImageStorageStats(
+        val totalFaces: Int,
+        val facesWithImages: Int,
+        val facesWithoutImages: Int,
+        val totalImageSizeKB: Int,
+        val averageImageSizeKB: Int
+    )
 }
