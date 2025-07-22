@@ -43,10 +43,10 @@ dependencies {
 
     // 人脸检测
     implementation(libs.play.services.mlkit.text.recognition)
-    implementation(libs.face.detection)
+    api(libs.face.detection)
 
     // TensorFlow Lite
-    implementation(libs.tensorflow.lite)
+    api(libs.tensorflow.lite)
 
     // Room database
     implementation(libs.androidx.room.runtime)
@@ -58,8 +58,8 @@ dependencies {
     implementation(libs.gson)
 
     // Coroutines
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.coroutines.android)
+    api(libs.kotlinx.coroutines.core)
+    api(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
 
     // Lifecycle
