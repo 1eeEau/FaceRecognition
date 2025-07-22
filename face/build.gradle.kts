@@ -75,9 +75,10 @@ afterEvaluate {
     publishing {
         publications {
             create<MavenPublication>("release") {
-                groupId = "com.lee.face"
+                group = "com.lee.face.recognition"
                 artifactId = "face"
-                version = "0.0.6" // 增加版本号
+                version = "0.0.6"
+                afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
             }
         }
     }
