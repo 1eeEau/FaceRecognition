@@ -28,8 +28,14 @@ class FeatureExtractor(
     private var isInitialized = false
 
     // 模型输入输出配置
-    private val inputSize = 112 // MobileFaceNet输入尺寸
+    private val inputSize = config.featureInputSize // MobileFaceNet输入尺寸
     private val outputSize = config.featureVectorDimension
+
+    /**
+     * 缓存byteBuffer，避免重复分配
+     */
+    private var cachedInputBuffer: ByteBuffer? = null
+    private var cachedOutputBuffer: ByteBuffer? = null
 
     /**interpreter
      * 初始化特征提取器
@@ -80,16 +86,14 @@ class FeatureExtractor(
             val preprocessedImage = ImageUtils.preprocessImage(faceBitmap, inputSize)
 
             // 2. 准备输入数据
-            val inputBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3)
-                .order(ByteOrder.nativeOrder())
+            val inputBuffer = getOrCreateInputBuffer()
 
             for (value in preprocessedImage) {
                 inputBuffer.putFloat(value)
             }
 
             // 3. 准备输出数据
-            val outputBuffer = ByteBuffer.allocateDirect(4 * outputSize)
-                .order(ByteOrder.nativeOrder())
+            val outputBuffer = getOrCreateOutputBuffer()
 
             // 4. 执行推理
             interpreter?.run(inputBuffer, outputBuffer)
@@ -127,6 +131,26 @@ class FeatureExtractor(
                 "特征提取失败", e
             )
         }
+    }
+
+    private fun getOrCreateInputBuffer(): ByteBuffer {
+        if (cachedInputBuffer == null) {
+            cachedInputBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3)
+                .order(ByteOrder.nativeOrder())
+        } else {
+            cachedInputBuffer!!.clear()
+        }
+        return cachedInputBuffer!!;
+    }
+
+    private fun getOrCreateOutputBuffer(): ByteBuffer {
+        if (cachedOutputBuffer == null) {
+            cachedOutputBuffer = ByteBuffer.allocateDirect(4 * inputSize)
+                .order(ByteOrder.nativeOrder())
+        } else {
+            cachedOutputBuffer!!.clear()
+        }
+        return cachedOutputBuffer!!
     }
 
     /**
@@ -256,11 +280,9 @@ class FeatureExtractor(
      */
     private fun warmUpModel() {
         try {
-            val dummyInput = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3)
-                .order(ByteOrder.nativeOrder())
+            val dummyInput = getOrCreateInputBuffer()
 
-            val dummyOutput =
-                ByteBuffer.allocateDirect(4 * outputSize).order(ByteOrder.nativeOrder())
+            val dummyOutput = getOrCreateOutputBuffer()
 
             interpreter?.run(dummyInput, dummyOutput)
 
