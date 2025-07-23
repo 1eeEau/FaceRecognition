@@ -1,5 +1,7 @@
 package com.holder.face.config
 
+import kotlin.math.max
+
 /**
  * 人脸识别配置类
  * 提供可配置的参数设置，支持Builder模式
@@ -36,7 +38,10 @@ data class FaceRecognitionConfig(
     val modelFileName: String = DEFAULT_MODEL_FILE_NAME,
 
     /** 向量相似度计算方式 */
-    val similarityMethod: SimilarityMethod = SimilarityMethod.COSINE
+    val similarityMethod: SimilarityMethod = SimilarityMethod.COSINE,
+
+    /** 人脸检测时的最大图像尺寸 */
+    val maxDetectionImageSize: Int = DEFAULT_MAX_DETECTION_IMAGE_SIZE
 ) {
 
     companion object {
@@ -50,6 +55,7 @@ data class FaceRecognitionConfig(
         const val DEFAULT_FACE_DETECTION_CONFIDENCE = 0.8f
         const val DEFAULT_DATABASE_NAME = "face_recognition.db"
         const val DEFAULT_MODEL_FILE_NAME = "MobileFaceNet.tflite"
+        const val DEFAULT_MAX_DETECTION_IMAGE_SIZE = 640 // 可配置的缩放尺寸
 
         /**
          * 获取默认配置
@@ -83,6 +89,7 @@ data class FaceRecognitionConfig(
                 minFaceSize > 0 &&
                 maxFaceSize > minFaceSize &&
                 faceDetectionConfidence in 0.0f..1.0f &&
+                maxDetectionImageSize in 320..800 &&
                 databaseName.isNotBlank() &&
                 modelFileName.isNotBlank()
     }
@@ -102,6 +109,7 @@ data class FaceRecognitionConfig(
         private var modelFileName: String = DEFAULT_MODEL_FILE_NAME
         private var similarityMethod: SimilarityMethod = SimilarityMethod.COSINE
         private var featureInputSize: Int = DEFAULT_FEATURE_INPUT_SIZE
+        private var maxDetectionImageSize: Int = DEFAULT_MAX_DETECTION_IMAGE_SIZE
 
         fun maxFaceCount(count: Int) = apply {
             require(count > 0) { "最大人脸数量必须大于0" }
@@ -156,6 +164,11 @@ data class FaceRecognitionConfig(
             this.featureInputSize = featureInputSize
         }
 
+        fun maxDetectionImageSize(maxDetectionImageSize: Int) = apply {
+            require(maxDetectionImageSize < 320 || maxDetectionImageSize < 800) { "缩放尺寸在320 - 800内" }
+            this.maxDetectionImageSize = maxDetectionImageSize
+        }
+
         fun build(): FaceRecognitionConfig {
             require(maxFaceSize > minFaceSize) { "最大人脸尺寸必须大于最小人脸尺寸" }
 
@@ -171,6 +184,7 @@ data class FaceRecognitionConfig(
                 modelFileName = modelFileName,
                 similarityMethod = similarityMethod,
                 featureInputSize = featureInputSize,
+                maxDetectionImageSize = maxDetectionImageSize
             )
 
             require(config.validate()) { "配置验证失败" }

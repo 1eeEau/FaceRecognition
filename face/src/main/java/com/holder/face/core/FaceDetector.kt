@@ -10,6 +10,8 @@ import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.holder.face.config.FaceRecognitionConfig
 import com.holder.face.exception.FaceRecognitionException
 import kotlinx.coroutines.tasks.await
+import kotlin.math.max
+import androidx.core.graphics.scale
 
 /**
  * 人脸检测器
@@ -79,7 +81,7 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
          */
         fun isSizeValid(minSize: Int, maxSize: Int): Boolean {
             val size = getFaceSize()
-            return size >= minSize && size <= maxSize
+            return size in minSize..maxSize
         }
     }
 
@@ -92,11 +94,34 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
         val startTime = System.currentTimeMillis()
 
         try {
-            val inputImage = InputImage.fromBitmap(bitmap, 0)
+
+            val maxDetectionSize = config.maxDetectionImageSize
+
+            val scaledBitmap =
+                if (bitmap.width > maxDetectionSize || bitmap.height > maxDetectionSize) {
+                    val scale = maxDetectionSize.toFloat() / max(bitmap.width, bitmap.height)
+                    val newWidth = (bitmap.width * scale).toInt()
+                    val newHeight = (bitmap.height * scale).toInt()
+
+                    if (config.enableDebugLog) {
+                        Log.d(
+                            "FaceDetector",
+                            "图像缩放 ${bitmap.width}x${bitmap.height} -> ${newWidth}x${newHeight}"
+                        )
+                    }
+                    bitmap.scale(newWidth, newHeight)
+                } else {
+                    bitmap
+                }
+            val inputImage = InputImage.fromBitmap(scaledBitmap, 0)
             val faces = detector.process(inputImage).await()
 
+            // 计算缩放比例，用于还原坐标 裁剪人脸
+            val scaleX = bitmap.width.toFloat() / scaledBitmap.width
+            val scaleY = bitmap.height.toFloat() / scaledBitmap.height
+
             val detectedFaces = faces.map { face ->
-                convertToDetectedFace(face)
+                convertToDetectedFace(face, scaleX, scaleY)
             }.filter { detectedFace ->
                 // 过滤不符合要求的人脸
                 detectedFace.confidence >= config.faceDetectionConfidence &&
@@ -104,6 +129,17 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
             }
 
             val processingTime = System.currentTimeMillis() - startTime
+
+            if (scaledBitmap != bitmap) {
+                scaledBitmap.recycle()
+            }
+
+            if (config.enableDebugLog) {
+                Log.d(
+                    "FAceDetector",
+                    "人脸检测耗时: ${processingTime}ms, 检测到${detectedFaces.size}个人脸"
+                )
+            }
 
             return DetectionResult(
                 faces = detectedFaces,
@@ -193,9 +229,15 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
     /**
      * 转换MLKit Face对象为DetectedFace
      */
-    private fun convertToDetectedFace(face: Face): DetectedFace {
+    private fun convertToDetectedFace(face: Face, scaleX: Float, scaleY: Float): DetectedFace {
+        val originalBoundingBox = Rect(
+            (face.boundingBox.left * scaleX).toInt(),
+            (face.boundingBox.top * scaleY).toInt(),
+            (face.boundingBox.right * scaleX).toInt(),
+            (face.boundingBox.bottom * scaleY).toInt(),
+        )
         return DetectedFace(
-            boundingBox = face.boundingBox,
+            boundingBox = originalBoundingBox,
             confidence = 1.0f, // MLKit不直接提供置信度，使用默认值
             trackingId = face.trackingId,
             rotationY = face.headEulerAngleY,
