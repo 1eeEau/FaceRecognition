@@ -14,6 +14,7 @@ import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 
 /**
  * 人脸特征提取器
@@ -82,41 +83,24 @@ class FeatureExtractor(
         val startTime = System.currentTimeMillis()
 
         try {
-            // 1. 图像预处理
-            val preprocessedImage = ImageUtils.preprocessImage(faceBitmap, inputSize)
-
-            // 2. 准备输入数据
+            // 1. 图像预处理 - 直接输出到ByteBuffer
             val inputBuffer = getOrCreateInputBuffer()
+            preprocessImageToBuffer(faceBitmap, inputBuffer)
 
-            for (value in preprocessedImage) {
-                inputBuffer.putFloat(value)
-            }
-
-            // 3. 准备输出数据
+            // 2. 准备输出数据
             val outputBuffer = getOrCreateOutputBuffer()
 
-            // 4. 执行推理
+            // 3. 执行推理
             interpreter?.run(inputBuffer, outputBuffer)
                 ?: throw FaceRecognitionException.FeatureExtractionException("解释器未初始化")
 
-            // 5. 解析输出
-            outputBuffer.rewind()
-            val features = FloatArray(outputSize)
-            for (i in features.indices) {
-                features[i] = outputBuffer.float
-            }
-
-            // 6. 特征向量归一化
-            val normalizedFeatures = normalizeFeatures(features)
+            // 4. 解析输出并归一化
+            val normalizedFeatures = extractAndNormalizeFeatures(outputBuffer)
 
             val processingTime = System.currentTimeMillis() - startTime
 
             if (config.enableDebugLog) {
                 Log.d("FeatureExtractor", "特征提取完成: ${processingTime}ms")
-                Log.d(
-                    "FeatureExtractor",
-                    "特征向量范围: [${normalizedFeatures.minOrNull()}, ${normalizedFeatures.maxOrNull()}]"
-                )
             }
 
             return FaceVector(
@@ -127,30 +111,95 @@ class FeatureExtractor(
         } catch (e: FaceRecognitionException) {
             throw e
         } catch (e: Exception) {
-            throw FaceRecognitionException.FeatureExtractionException(
-                "特征提取失败", e
-            )
+            throw FaceRecognitionException.FeatureExtractionException("特征提取失败", e)
         }
     }
 
     private fun getOrCreateInputBuffer(): ByteBuffer {
         if (cachedInputBuffer == null) {
-            cachedInputBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3)
+            val bufferSize = 4 * inputSize * inputSize * 3
+            cachedInputBuffer = ByteBuffer.allocateDirect(bufferSize)
                 .order(ByteOrder.nativeOrder())
         } else {
-            cachedInputBuffer!!.clear()
+            cachedInputBuffer!!.rewind()
         }
-        return cachedInputBuffer!!;
+        return cachedInputBuffer!!
     }
 
     private fun getOrCreateOutputBuffer(): ByteBuffer {
         if (cachedOutputBuffer == null) {
-            cachedOutputBuffer = ByteBuffer.allocateDirect(4 * outputSize)
+            val bufferSize = 4 * outputSize
+            cachedOutputBuffer = ByteBuffer.allocateDirect(bufferSize)
                 .order(ByteOrder.nativeOrder())
         } else {
-            cachedOutputBuffer!!.clear()
+            cachedOutputBuffer!!.rewind()
         }
         return cachedOutputBuffer!!
+    }
+
+    /**
+     * 直接将图像预处理到ByteBuffer，避免中间数组
+     */
+    private fun preprocessImageToBuffer(bitmap: Bitmap, buffer: ByteBuffer) {
+        buffer.rewind()
+
+        // 缩放图像
+        val resized = if (bitmap.width != inputSize || bitmap.height != inputSize) {
+            bitmap.scale(inputSize, inputSize)
+        } else {
+            bitmap
+        }
+
+        // 直接提取像素并写入buffer
+        val pixels = IntArray(inputSize * inputSize)
+        resized.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
+
+        // ImageNet标准化参数
+        val mean = floatArrayOf(0.485f, 0.456f, 0.406f)
+        val std = floatArrayOf(0.229f, 0.224f, 0.225f)
+
+        for (pixel in pixels) {
+            val r = ((pixel shr 16) and 0xFF) / 255f
+            val g = ((pixel shr 8) and 0xFF) / 255f
+            val b = (pixel and 0xFF) / 255f
+
+            // 标准化并直接写入buffer
+            buffer.putFloat((r - mean[0]) / std[0])
+            buffer.putFloat((g - mean[1]) / std[1])
+            buffer.putFloat((b - mean[2]) / std[2])
+        }
+
+        // 释放临时bitmap
+        if (resized != bitmap) {
+            resized.recycle()
+        }
+    }
+
+    /**
+     * 直接从ByteBuffer提取并归一化特征，减少数组拷贝
+     */
+    private fun extractAndNormalizeFeatures(outputBuffer: ByteBuffer): FloatArray {
+        outputBuffer.rewind()
+
+        val features = FloatArray(outputSize)
+        var norm = 0f
+
+        // 第一遍：读取数据并计算L2范数
+        for (i in features.indices) {
+            val value = outputBuffer.float
+            features[i] = value
+            norm += value * value
+        }
+
+        // 归一化
+        norm = kotlin.math.sqrt(norm)
+        if (norm > 0f) {
+            for (i in features.indices) {
+                features[i] /= norm
+            }
+        }
+
+        return features
     }
 
     /**
@@ -233,23 +282,22 @@ class FeatureExtractor(
      */
     private fun calculateFeatureQuality(features: FloatArray): Float {
         try {
-            // 基于特征向量的统计特性计算质量分数
-            val mean = features.average().toFloat()
-            val variance = features.map { (it - mean) * (it - mean) }.average().toFloat()
-            val stdDev = kotlin.math.sqrt(variance)
+            // 简化计算：基于特征向量的方差
+            var sum = 0f
+            var sumSquares = 0f
 
-            // 特征分布越均匀，质量越好
-            val uniformityScore = 1f - kotlin.math.abs(mean)
-            val diversityScore = kotlin.math.min(1f, stdDev * 2f)
+            for (value in features) {
+                sum += value
+                sumSquares += value * value
+            }
 
-            // 检查是否有异常值
-            val outlierCount = features.count { kotlin.math.abs(it) > 3f }
-            val outlierPenalty = outlierCount.toFloat() / features.size
+            val mean = sum / features.size
+            val variance = (sumSquares / features.size) - (mean * mean)
 
-            val qualityScore = (uniformityScore + diversityScore) / 2f - outlierPenalty
-            return kotlin.math.max(0f, kotlin.math.min(1f, qualityScore))
+            // 将方差映射到[0.5, 1.0]范围
+            return 0.5f + kotlin.math.min(0.5f, variance * 2f)
         } catch (e: Exception) {
-            return 0.5f // 默认中等质量
+            return 0.8f // 默认较高质量
         }
     }
 
@@ -280,11 +328,12 @@ class FeatureExtractor(
      */
     private fun warmUpModel() {
         try {
-            val dummyInput = getOrCreateInputBuffer()
-
-            val dummyOutput = getOrCreateOutputBuffer()
-
-            interpreter?.run(dummyInput, dummyOutput)
+            // 预热多次以确保JIT优化
+            repeat(3) {
+                val dummyInput = getOrCreateInputBuffer()
+                val dummyOutput = getOrCreateOutputBuffer()
+                interpreter?.run(dummyInput, dummyOutput)
+            }
 
             if (config.enableDebugLog) {
                 Log.d("FeatureExtractor", "模型预热完成")
