@@ -279,24 +279,50 @@ class FeatureExtractor(
 
     /**
      * 计算特征质量分数
+     * 改进的质量评估，考虑多个因素
      */
     private fun calculateFeatureQuality(features: FloatArray): Float {
         try {
-            // 简化计算：基于特征向量的方差
-            var sum = 0f
-            var sumSquares = 0f
-
-            for (value in features) {
-                sum += value
-                sumSquares += value * value
+            // 1. 检查基本有效性
+            if (features.any { it.isNaN() || it.isInfinite() }) {
+                return 0.1f
             }
 
-            val mean = sum / features.size
-            val variance = (sumSquares / features.size) - (mean * mean)
+            // 2. 计算L2范数（应该接近1，因为已归一化）
+            val norm = kotlin.math.sqrt(features.map { it * it }.sum())
+            val normScore = if (kotlin.math.abs(norm - 1.0f) < 0.1f) 1.0f else 0.5f
 
-            // 将方差映射到[0.5, 1.0]范围
-            return 0.5f + kotlin.math.min(0.5f, variance * 2f)
+            // 3. 计算特征分布的标准差
+            val mean = features.average().toFloat()
+            val variance = features.map { (it - mean) * (it - mean) }.average().toFloat()
+            val stdDev = kotlin.math.sqrt(variance)
+
+            // 良好的特征应该有适中的标准差（0.1-0.5）
+            val stdScore = when {
+                stdDev < 0.05f -> 0.3f  // 方差过小，特征不够丰富
+                stdDev < 0.1f -> 0.6f   // 方差较小
+                stdDev <= 0.5f -> 1.0f  // 理想范围
+                stdDev <= 1.0f -> 0.8f  // 方差较大
+                else -> 0.4f            // 方差过大，可能有噪声
+            }
+
+            // 4. 检查零值比例
+            val zeroCount = features.count { kotlin.math.abs(it) < 1e-6f }
+            val zeroRatio = zeroCount.toFloat() / features.size
+            val zeroScore = kotlin.math.max(0.2f, 1.0f - zeroRatio * 2f)
+
+            // 综合评分
+            val quality = (normScore * 0.3f + stdScore * 0.5f + zeroScore * 0.2f)
+
+            if (config.enableDebugLog) {
+                Log.d("FeatureExtractor", "特征质量评估: norm=$norm, std=$stdDev, zero=$zeroRatio, quality=$quality")
+            }
+
+            return kotlin.math.max(0.1f, kotlin.math.min(1.0f, quality))
         } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.w("FeatureExtractor", "特征质量计算失败: ${e.message}")
+            }
             return 0.8f // 默认较高质量
         }
     }

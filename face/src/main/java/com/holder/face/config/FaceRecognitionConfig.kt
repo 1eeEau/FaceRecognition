@@ -47,7 +47,7 @@ data class FaceRecognitionConfig(
     companion object {
         // 默认配置常量
         const val DEFAULT_MAX_FACE_COUNT = 50
-        const val DEFAULT_RECOGNITION_THRESHOLD = 0.85f
+        const val DEFAULT_RECOGNITION_THRESHOLD = 0.75f
         const val DEFAULT_FEATURE_VECTOR_DIMENSION = 512
         const val DEFAULT_FEATURE_INPUT_SIZE = 112
         const val DEFAULT_MIN_FACE_SIZE = 80
@@ -160,12 +160,12 @@ data class FaceRecognitionConfig(
         }
 
         fun featureInputSize(featureInputSize: Int) = apply {
-            require(featureInputSize < 0) { "输入大小必须大于0" }
+            require(featureInputSize > 0) { "输入大小必须大于0" }
             this.featureInputSize = featureInputSize
         }
 
         fun maxDetectionImageSize(maxDetectionImageSize: Int) = apply {
-            require(maxDetectionImageSize < 320 || maxDetectionImageSize < 800) { "缩放尺寸在320 - 800内" }
+            require(maxDetectionImageSize in 320..800) { "缩放尺寸必须在320-800之间" }
             this.maxDetectionImageSize = maxDetectionImageSize
         }
 

@@ -60,21 +60,33 @@ class FaceComparator(private val config: FaceRecognitionConfig) {
     }
 
     /**
-     * 比较两个人脸向量
+     * 比较两个人脸向量 (增强版本)
      * @param vector1 第一个人脸向量
      * @param vector2 第二个人脸向量
      * @return 比较结果
      */
     fun compare(vector1: FaceVector, vector2: FaceVector): ComparisonResult {
         try {
-            val similarity = when (config.similarityMethod) {
+            // 1. 预验证：检查向量质量
+            if (!isValidVector(vector1) || !isValidVector(vector2)) {
+                return ComparisonResult(
+                    similarity = 0f,
+                    distance = Float.MAX_VALUE,
+                    isMatch = false,
+                    personId = vector2.personId,
+                    method = "${config.similarityMethod.name}_INVALID"
+                )
+            }
+
+            // 2. 计算原始相似度
+            val rawSimilarity = when (config.similarityMethod) {
                 FaceRecognitionConfig.SimilarityMethod.COSINE -> {
-                    vector1.cosineSimilarity(vector2)
+                    calculateEnhancedCosineSimilarity(vector1, vector2)
                 }
 
                 FaceRecognitionConfig.SimilarityMethod.EUCLIDEAN -> {
                     val distance = vector1.euclideanDistance(vector2)
-                    VectorUtils.distanceToSimilarity(distance, 2.0f) // 最大距离设为2.0
+                    VectorUtils.distanceToSimilarity(distance, 2.0f)
                 }
 
                 FaceRecognitionConfig.SimilarityMethod.MANHATTAN -> {
@@ -83,9 +95,10 @@ class FaceComparator(private val config: FaceRecognitionConfig) {
                 }
             }
 
+            // 3. 计算距离
             val distance = when (config.similarityMethod) {
                 FaceRecognitionConfig.SimilarityMethod.COSINE -> {
-                    1f - similarity // 余弦距离
+                    1f - rawSimilarity
                 }
 
                 FaceRecognitionConfig.SimilarityMethod.EUCLIDEAN -> {
@@ -97,10 +110,24 @@ class FaceComparator(private val config: FaceRecognitionConfig) {
                 }
             }
 
-            val isMatch = similarity >= config.recognitionThreshold
+            // 4. 质量加权调整
+            val qualityWeight = calculateVectorQualityWeight(vector1, vector2)
+            val adjustedSimilarity = rawSimilarity * qualityWeight
+
+            // 5. 基础阈值判断
+            val isMatch = adjustedSimilarity >= config.recognitionThreshold
+
+            if (config.enableDebugLog) {
+                Log.d("FaceComparator", "向量比较详情:")
+                Log.d("FaceComparator", "  原始相似度: $rawSimilarity")
+                Log.d("FaceComparator", "  质量权重: $qualityWeight")
+                Log.d("FaceComparator", "  调整后相似度: $adjustedSimilarity")
+                Log.d("FaceComparator", "  距离: $distance")
+                Log.d("FaceComparator", "  匹配结果: $isMatch")
+            }
 
             return ComparisonResult(
-                similarity = similarity,
+                similarity = adjustedSimilarity,
                 distance = distance,
                 isMatch = isMatch,
                 personId = vector2.personId,
@@ -325,6 +352,143 @@ class FaceComparator(private val config: FaceRecognitionConfig) {
             )
         } catch (e: Exception) {
             return config.recognitionThreshold
+        }
+    }
+
+    /**
+     * 增强的余弦相似度计算
+     * 使用简化的映射方式，避免过度复杂的分段映射
+     */
+    private fun calculateEnhancedCosineSimilarity(vector1: FaceVector, vector2: FaceVector): Float {
+        try {
+            // 1. 计算原始余弦相似度 (范围 [-1, 1])
+            val dotProduct = vector1.dot(vector2)
+            val norm1 = vector1.l2Norm()
+            val norm2 = vector2.l2Norm()
+
+            if (norm1 == 0f || norm2 == 0f) {
+                return 0f
+            }
+
+            val rawCosine = dotProduct / (norm1 * norm2)
+
+            // 2. 简化的映射方式：线性映射到 [0, 1]
+            // 对于人脸识别，通常余弦相似度在 [0, 1] 范围内更有意义
+            val similarity = kotlin.math.max(0f, rawCosine)
+
+            if (config.enableDebugLog) {
+                Log.d("FaceComparator", "余弦相似度计算: 原始=$rawCosine, 映射后=$similarity")
+            }
+
+            return similarity
+        } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.w("FaceComparator", "余弦相似度计算失败: ${e.message}")
+            }
+            return 0f
+        }
+    }
+
+    /**
+     * 验证向量是否有效
+     */
+    private fun isValidVector(vector: FaceVector): Boolean {
+        try {
+            // 1. 检查向量维度
+            if (vector.dimension != config.featureVectorDimension) {
+                if (config.enableDebugLog) {
+                    Log.w("FaceComparator", "向量维度不匹配: ${vector.dimension} vs ${config.featureVectorDimension}")
+                }
+                return false
+            }
+
+            // 2. 检查是否包含无效值
+            if (vector.vector.any { it.isNaN() || it.isInfinite() }) {
+                if (config.enableDebugLog) {
+                    Log.w("FaceComparator", "向量包含无效值 (NaN或Infinite)")
+                }
+                return false
+            }
+
+            // 3. 检查是否为零向量
+            val norm = vector.l2Norm()
+            if (norm < 1e-6f) {
+                if (config.enableDebugLog) {
+                    Log.w("FaceComparator", "向量接近零向量，范数: $norm")
+                }
+                return false
+            }
+
+            // 4. 检查向量是否归一化
+            if (kotlin.math.abs(norm - 1.0f) > 0.1f) {
+                if (config.enableDebugLog) {
+                    Log.w("FaceComparator", "向量未正确归一化，范数: $norm")
+                }
+                // 注意：这里不返回false，因为可能是正常的未归一化向量
+            }
+
+            return true
+        } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.w("FaceComparator", "向量验证失败: ${e.message}")
+            }
+            return false
+        }
+    }
+
+    /**
+     * 计算向量质量权重
+     */
+    private fun calculateVectorQualityWeight(vector1: FaceVector, vector2: FaceVector): Float {
+        try {
+            var weight = 1.0f
+
+            // 1. 基于置信度的权重
+            val conf1 = vector1.confidence ?: 0.8f
+            val conf2 = vector2.confidence ?: 0.8f
+            val confidenceWeight = (conf1 + conf2) / 2f
+
+            // 2. 基于向量归一化程度的权重
+            val norm1 = vector1.l2Norm()
+            val norm2 = vector2.l2Norm()
+            val normWeight = kotlin.math.min(
+                1f - kotlin.math.abs(norm1 - 1f),
+                1f - kotlin.math.abs(norm2 - 1f)
+            )
+
+            // 3. 基于特征分布的权重
+            val distWeight1 = calculateFeatureDistributionWeight(vector1.vector)
+            val distWeight2 = calculateFeatureDistributionWeight(vector2.vector)
+            val distributionWeight = (distWeight1 + distWeight2) / 2f
+
+            // 综合权重 (范围 [0.5, 1.0])
+            weight = 0.5f + (confidenceWeight * 0.2f + normWeight * 0.2f + distributionWeight * 0.1f)
+
+            return kotlin.math.max(0.5f, kotlin.math.min(1.0f, weight))
+        } catch (e: Exception) {
+            return 0.8f
+        }
+    }
+
+    /**
+     * 计算特征分布权重
+     */
+    private fun calculateFeatureDistributionWeight(vector: FloatArray): Float {
+        try {
+            val mean = vector.average().toFloat()
+            val variance = vector.map { (it - mean) * (it - mean) }.average().toFloat()
+            val stdDev = kotlin.math.sqrt(variance)
+
+            // 良好的特征分布应该有适中的标准差 (0.1 - 0.5)
+            return when {
+                stdDev < 0.05f -> 0.3f  // 方差过小，特征不够丰富
+                stdDev < 0.1f -> 0.6f   // 方差较小
+                stdDev <= 0.5f -> 1.0f  // 理想范围
+                stdDev <= 1.0f -> 0.8f  // 方差较大
+                else -> 0.4f            // 方差过大，可能有噪声
+            }
+        } catch (e: Exception) {
+            return 0.8f
         }
     }
 }

@@ -10,33 +10,44 @@ import kotlin.math.*
 object VectorUtils {
     
     /**
-     * 计算两个向量的余弦相似度
+     * 计算两个向量的余弦相似度 (原始版本，返回[-1,1]范围)
      * @param vector1 第一个向量
      * @param vector2 第二个向量
-     * @return 相似度值 [0, 1]，1表示完全相同，0表示完全不同
+     * @return 相似度值 [-1, 1]，1表示完全相同，-1表示完全相反，0表示正交
      */
     fun cosineSimilarity(vector1: FloatArray, vector2: FloatArray): Float {
-        require(vector1.size == vector2.size) { 
-            "向量维度不匹配: ${vector1.size} vs ${vector2.size}" 
+        require(vector1.size == vector2.size) {
+            "向量维度不匹配: ${vector1.size} vs ${vector2.size}"
         }
-        
+
         try {
             val dotProduct = dotProduct(vector1, vector2)
             val norm1 = l2Norm(vector1)
             val norm2 = l2Norm(vector2)
-            
+
             if (norm1 == 0f || norm2 == 0f) {
                 return 0f
             }
-            
-            // 余弦相似度范围是[-1, 1]，映射到[0, 1]
-            val cosineSim = dotProduct / (norm1 * norm2)
-            return (cosineSim + 1f) / 2f
+
+            // 返回原始余弦相似度 [-1, 1]
+            return dotProduct / (norm1 * norm2)
         } catch (e: Exception) {
             throw FaceRecognitionException.VectorCalculationException(
                 "余弦相似度计算失败", e
             )
         }
+    }
+
+    /**
+     * 计算两个向量的余弦相似度 (映射到[0,1]范围)
+     * @param vector1 第一个向量
+     * @param vector2 第二个向量
+     * @return 相似度值 [0, 1]，1表示完全相同，0表示完全不同
+     */
+    fun cosineSimilarityNormalized(vector1: FloatArray, vector2: FloatArray): Float {
+        val rawCosine = cosineSimilarity(vector1, vector2)
+        // 简单线性映射到[0,1]
+        return (rawCosine + 1f) / 2f
     }
     
     /**

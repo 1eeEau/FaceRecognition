@@ -16,7 +16,6 @@ import com.holder.face.utils.ImageBase64Utils
 import com.holder.face.utils.ImageUtils
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
-import java.nio.ByteBuffer
 
 /**
  * 人脸识别管理器
@@ -231,6 +230,29 @@ class FaceRecognitionManager private constructor(
 
             val processingTime = System.currentTimeMillis() - startTime
 
+            // 7. 详细的匹配日志
+            if (config.enableDebugLog) {
+                Log.i("FaceRecognitionManager", "识别完成: ${processingTime}ms")
+                Log.i("FaceRecognitionManager", "查询向量质量: ${queryVector.confidence}")
+                Log.i(
+                    "FaceRecognitionManager",
+                    "最佳匹配: personId=${bestMatch?.personId}, similarity=${bestMatch?.similarity}, isMatch=${bestMatch?.isMatch}"
+                )
+                Log.i("FaceRecognitionManager", "阈值: ${config.recognitionThreshold}")
+
+                // 如果没有匹配，进行诊断
+                if (bestMatch?.isMatch != true) {
+                    val topMatches = faceComparator.getTopMatches(queryVector, registeredFaces, 3)
+                    Log.w("FaceRecognitionManager", "未匹配，前3个相似度:")
+                    topMatches.forEachIndexed { index, match ->
+                        Log.w(
+                            "FaceRecognitionManager",
+                            "  ${index + 1}. ${match.personId}: ${match.similarity}"
+                        )
+                    }
+                }
+            }
+
             return if (bestMatch?.isMatch == true) {
                 RecognitionResult.success(
                     personId = bestMatch.personId,
@@ -241,6 +263,7 @@ class FaceRecognitionManager private constructor(
                         "method" to bestMatch.method,
                         "faceSize" to detectedFace.getFaceSize(),
                         "registeredCount" to registeredFaces.size,
+                        "queryQuality" to (queryVector.confidence ?: 0.8f)
                     )
                 )
             } else {
@@ -250,6 +273,7 @@ class FaceRecognitionManager private constructor(
                         "bestSimilarity" to (bestMatch?.similarity ?: 0f),
                         "threshold" to config.recognitionThreshold,
                         "registeredCount" to registeredFaces.size,
+                        "queryQuality" to (queryVector.confidence ?: 0.8f)
                     )
                 )
             }
