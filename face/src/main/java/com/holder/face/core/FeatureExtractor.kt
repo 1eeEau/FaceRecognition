@@ -45,6 +45,9 @@ class FeatureExtractor(
             }
 
             interpreter = Interpreter(modelBuffer, options)
+
+            warmUpModel()
+
             isInitialized = true
 
             if (config.enableDebugLog) {
@@ -246,6 +249,29 @@ class FeatureExtractor(
             "isInitialized" to isInitialized,
             "interpreterVersion" to (interpreter?.let { "TensorFlow Lite" } ?: "未初始化")
         )
+    }
+
+    /**
+     * 预热模型
+     */
+    private fun warmUpModel() {
+        try {
+            val dummyInput = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3)
+                .order(ByteOrder.nativeOrder())
+
+            val dummyOutput =
+                ByteBuffer.allocateDirect(4 * outputSize).order(ByteOrder.nativeOrder())
+
+            interpreter?.run(dummyInput, dummyOutput)
+
+            if (config.enableDebugLog) {
+                Log.d("FeatureExtractor", "模型预热完成")
+            }
+        } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.w("FeatureExtractor", "模型预热失败： ${e.message}")
+            }
+        }
     }
 
     /**

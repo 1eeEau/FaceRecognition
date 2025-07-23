@@ -16,6 +16,7 @@ import com.holder.face.utils.ImageBase64Utils
 import com.holder.face.utils.ImageUtils
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
+import java.nio.ByteBuffer
 
 /**
  * 人脸识别管理器
@@ -207,8 +208,14 @@ class FaceRecognitionManager private constructor(
         val startTime = System.currentTimeMillis()
 
         try {
+            val detectionResultStartTime = System.currentTimeMillis()
             // 1. 人脸检测
             val detectionResult = faceDetector.detectFaces(bitmap)
+            val detectionResultEndTime = System.currentTimeMillis()
+            Log.d(
+                "detectionResult",
+                "人脸检测耗时： ${detectionResultEndTime - detectionResultStartTime}ms"
+            )
 
             when {
                 detectionResult.faces.isEmpty() -> {
@@ -241,14 +248,26 @@ class FaceRecognitionManager private constructor(
                 bestFace!!
             }
 
+            val faceCropStartTime = System.currentTimeMillis()
             // 3. 裁剪人脸区域
             val faceBitmap = ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
+            val faceCropEndTime = System.currentTimeMillis()
+            Log.d("CropFace", "裁剪人脸耗时: ${faceCropEndTime - faceCropStartTime}ms")
 
+            val queryVectorStartTime = System.currentTimeMillis()
             // 4. 提取特征
             val queryVector = featureExtractor.extractFeatures(faceBitmap, "query")
+            val queryVectorEndTime = System.currentTimeMillis()
+            Log.d("queryVector", "特征提取耗时: ${queryVectorEndTime - queryVectorStartTime}ms")
 
+            val registerFaceStartTime = System.currentTimeMillis()
             // 5. 获取所有已注册的人脸
             val registeredFaces = faceRepository.getAllEnabledFaces()
+            val registerFaceEndTime = System.currentTimeMillis()
+            Log.d(
+                "registeredFace",
+                "获取人脸耗时: ${registerFaceEndTime - registerFaceStartTime}ms"
+            )
 
             if (registeredFaces.isEmpty()) {
                 return RecognitionResult.failure(
@@ -257,8 +276,14 @@ class FaceRecognitionManager private constructor(
                 )
             }
 
+            val batchFaceStartTime = System.currentTimeMillis()
             // 6. 人脸比较
             val bestMatch = faceComparator.findBestMatch(queryVector, registeredFaces)
+            val batchFaceEndTime = System.currentTimeMillis()
+            Log.d(
+                "batchFace",
+                "人脸比较耗时: ${batchFaceEndTime - batchFaceStartTime}ms"
+            )
 
             val processingTime = System.currentTimeMillis() - startTime
 
