@@ -12,6 +12,7 @@ import com.holder.face.exception.FaceRecognitionException
 import kotlinx.coroutines.tasks.await
 import kotlin.math.max
 import androidx.core.graphics.scale
+import com.holder.face.model.RecognitionResult
 
 /**
  * 人脸检测器
@@ -96,18 +97,22 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
         try {
             val maxDetectionSize = config.maxDetectionImageSize
 
-            val scaledBitmap = if (bitmap.width > maxDetectionSize || bitmap.height > maxDetectionSize) {
-                val scale = maxDetectionSize.toFloat() / max(bitmap.width, bitmap.height)
-                val newWidth = (bitmap.width * scale).toInt()
-                val newHeight = (bitmap.height * scale).toInt()
+            val scaledBitmap =
+                if (bitmap.width > maxDetectionSize || bitmap.height > maxDetectionSize) {
+                    val scale = maxDetectionSize.toFloat() / max(bitmap.width, bitmap.height)
+                    val newWidth = (bitmap.width * scale).toInt()
+                    val newHeight = (bitmap.height * scale).toInt()
 
-                if (config.enableDebugLog) {
-                    Log.d("FaceDetector", "图像缩放 ${bitmap.width}x${bitmap.height} -> ${newWidth}x${newHeight}")
+                    if (config.enableDebugLog) {
+                        Log.d(
+                            "FaceDetector",
+                            "图像缩放 ${bitmap.width}x${bitmap.height} -> ${newWidth}x${newHeight}"
+                        )
+                    }
+                    bitmap.scale(newWidth, newHeight)
+                } else {
+                    bitmap
                 }
-                bitmap.scale(newWidth, newHeight)
-            } else {
-                bitmap
-            }
 
             val inputImage = InputImage.fromBitmap(scaledBitmap, 0)
             val faces = detector.process(inputImage).await()
@@ -121,8 +126,8 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
             }.filter { detectedFace ->
                 // 增强边界检查
                 isValidBoundingBox(detectedFace.boundingBox, bitmap.width, bitmap.height) &&
-                detectedFace.confidence >= config.faceDetectionConfidence &&
-                detectedFace.isSizeValid(config.minFaceSize, config.maxFaceSize)
+                        detectedFace.confidence >= config.faceDetectionConfidence &&
+                        detectedFace.isSizeValid(config.minFaceSize, config.maxFaceSize)
             }
 
             val processingTime = System.currentTimeMillis() - startTime
@@ -133,7 +138,10 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
             }
 
             if (config.enableDebugLog) {
-                Log.d("FaceDetector", "人脸检测耗时: ${processingTime}ms, 检测到${detectedFaces.size}个人脸")
+                Log.d(
+                    "FaceDetector",
+                    "人脸检测耗时: ${processingTime}ms, 检测到${detectedFaces.size}个人脸"
+                )
             }
 
             return DetectionResult(
@@ -144,6 +152,36 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
             )
         } catch (e: Exception) {
             throw FaceRecognitionException.FaceDetectionException("人脸检测失败", e)
+        }
+    }
+
+    suspend fun detectLargestFace(bitmap: Bitmap): DetectedFace {
+        val detectionResult = detectFaces(bitmap)
+        return when {
+            detectionResult.faces.isEmpty() -> {
+                throw FaceRecognitionException.FaceDetectionException("未检测到人脸")
+            }
+            // 2. 选择最佳人脸（如果有多个人脸，选择占比最大且质量最好的）
+            detectionResult.faces.size > 1 -> {
+                // 综合考虑人脸大小选择最佳人脸
+                val bestFace = detectionResult.faces.maxByOrNull { face ->
+                    (face.boundingBox.width() * face.boundingBox.height()).toFloat()
+                }
+
+                if (config.enableDebugLog) {
+                    Log.i(
+                        "FaceRecognitionManager",
+                        "检测到${detectionResult.faces.size}个人脸，选择最佳人脸进行识别"
+                    )
+                    Log.i(
+                        "FaceRecognitionManager",
+                        "选中人脸大小: ${bestFace?.getFaceSize()}, 质量: ${bestFace?.isGoodQuality()}"
+                    )
+                }
+                bestFace!!
+            }
+
+            else -> detectionResult.faces.first()
         }
     }
 
@@ -232,7 +270,10 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
         val originalBoundingBox = Rect(left, top, right, bottom)
 
         if (config.enableDebugLog) {
-            Log.d("FaceDetector", "坐标转换: 缩放图${face.boundingBox} -> 原图${originalBoundingBox}")
+            Log.d(
+                "FaceDetector",
+                "坐标转换: 缩放图${face.boundingBox} -> 原图${originalBoundingBox}"
+            )
         }
 
         return DetectedFace(
@@ -278,10 +319,10 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
      */
     private fun isValidBoundingBox(rect: Rect, imageWidth: Int, imageHeight: Int): Boolean {
         return rect.left >= 0 &&
-               rect.top >= 0 &&
-               rect.right <= imageWidth &&
-               rect.bottom <= imageHeight &&
-               rect.width() > 0 &&
-               rect.height() > 0
+                rect.top >= 0 &&
+                rect.right <= imageWidth &&
+                rect.bottom <= imageHeight &&
+                rect.width() > 0 &&
+                rect.height() > 0
     }
 }

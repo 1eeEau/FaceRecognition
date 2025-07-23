@@ -133,7 +133,7 @@ class FaceRecognitionManager private constructor(
             }
 
             // 2. 人脸检测
-            val detectedFace = faceDetector.detectSingleFace(bitmap)
+            val detectedFace = faceDetector.detectLargestFace(bitmap)
 
             // 3. 裁剪人脸区域
             val faceBitmap = ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
@@ -208,66 +208,16 @@ class FaceRecognitionManager private constructor(
         val startTime = System.currentTimeMillis()
 
         try {
-            val detectionResultStartTime = System.currentTimeMillis()
-            // 1. 人脸检测
-            val detectionResult = faceDetector.detectFaces(bitmap)
-            val detectionResultEndTime = System.currentTimeMillis()
-            Log.d(
-                "detectionResult",
-                "人脸检测耗时： ${detectionResultEndTime - detectionResultStartTime}ms"
-            )
+            val detectedFace = faceDetector.detectLargestFace(bitmap);
 
-            when {
-                detectionResult.faces.isEmpty() -> {
-                    return RecognitionResult.noFaceDetected(
-                        System.currentTimeMillis() - startTime
-                    )
-                }
-            }
-
-            // 2. 选择最佳人脸（如果有多个人脸，选择占比最大且质量最好的）
-            val detectedFace = if (detectionResult.faces.size == 1) {
-                detectionResult.faces.first()
-            } else {
-                // 综合考虑人脸大小选择最佳人脸
-                val bestFace = detectionResult.faces.maxByOrNull { face ->
-                    (face.boundingBox.width() * face.boundingBox.height()).toFloat()
-                }
-
-                if (config.enableDebugLog) {
-                    Log.i(
-                        "FaceRecognitionManager",
-                        "检测到${detectionResult.faces.size}个人脸，选择最佳人脸进行识别"
-                    )
-                    Log.i(
-                        "FaceRecognitionManager",
-                        "选中人脸大小: ${bestFace?.getFaceSize()}, 质量: ${bestFace?.isGoodQuality()}"
-                    )
-                }
-
-                bestFace!!
-            }
-
-            val faceCropStartTime = System.currentTimeMillis()
             // 3. 裁剪人脸区域
             val faceBitmap = ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
-            val faceCropEndTime = System.currentTimeMillis()
-            Log.d("CropFace", "裁剪人脸耗时: ${faceCropEndTime - faceCropStartTime}ms")
 
-            val queryVectorStartTime = System.currentTimeMillis()
             // 4. 提取特征
             val queryVector = featureExtractor.extractFeatures(faceBitmap, "query")
-            val queryVectorEndTime = System.currentTimeMillis()
-            Log.d("queryVector", "特征提取耗时: ${queryVectorEndTime - queryVectorStartTime}ms")
 
-            val registerFaceStartTime = System.currentTimeMillis()
             // 5. 获取所有已注册的人脸
             val registeredFaces = faceRepository.getAllEnabledFaces()
-            val registerFaceEndTime = System.currentTimeMillis()
-            Log.d(
-                "registeredFace",
-                "获取人脸耗时: ${registerFaceEndTime - registerFaceStartTime}ms"
-            )
 
             if (registeredFaces.isEmpty()) {
                 return RecognitionResult.failure(
@@ -276,14 +226,8 @@ class FaceRecognitionManager private constructor(
                 )
             }
 
-            val batchFaceStartTime = System.currentTimeMillis()
             // 6. 人脸比较
             val bestMatch = faceComparator.findBestMatch(queryVector, registeredFaces)
-            val batchFaceEndTime = System.currentTimeMillis()
-            Log.d(
-                "batchFace",
-                "人脸比较耗时: ${batchFaceEndTime - batchFaceStartTime}ms"
-            )
 
             val processingTime = System.currentTimeMillis() - startTime
 
@@ -297,7 +241,6 @@ class FaceRecognitionManager private constructor(
                         "method" to bestMatch.method,
                         "faceSize" to detectedFace.getFaceSize(),
                         "registeredCount" to registeredFaces.size,
-                        "detectedFaceCount" to detectionResult.faces.size
                     )
                 )
             } else {
@@ -307,7 +250,6 @@ class FaceRecognitionManager private constructor(
                         "bestSimilarity" to (bestMatch?.similarity ?: 0f),
                         "threshold" to config.recognitionThreshold,
                         "registeredCount" to registeredFaces.size,
-                        "detectedFaceCount" to detectionResult.faces.size
                     )
                 )
             }

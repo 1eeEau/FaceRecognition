@@ -145,7 +145,7 @@ class FeatureExtractor(
 
     private fun getOrCreateOutputBuffer(): ByteBuffer {
         if (cachedOutputBuffer == null) {
-            cachedOutputBuffer = ByteBuffer.allocateDirect(4 * inputSize)
+            cachedOutputBuffer = ByteBuffer.allocateDirect(4 * outputSize)
                 .order(ByteOrder.nativeOrder())
         } else {
             cachedOutputBuffer!!.clear()
