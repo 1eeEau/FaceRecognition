@@ -94,51 +94,46 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
         val startTime = System.currentTimeMillis()
 
         try {
-
             val maxDetectionSize = config.maxDetectionImageSize
 
-            val scaledBitmap =
-                if (bitmap.width > maxDetectionSize || bitmap.height > maxDetectionSize) {
-                    val scale = maxDetectionSize.toFloat() / max(bitmap.width, bitmap.height)
-                    val newWidth = (bitmap.width * scale).toInt()
-                    val newHeight = (bitmap.height * scale).toInt()
+            val scaledBitmap = if (bitmap.width > maxDetectionSize || bitmap.height > maxDetectionSize) {
+                val scale = maxDetectionSize.toFloat() / max(bitmap.width, bitmap.height)
+                val newWidth = (bitmap.width * scale).toInt()
+                val newHeight = (bitmap.height * scale).toInt()
 
-                    if (config.enableDebugLog) {
-                        Log.d(
-                            "FaceDetector",
-                            "图像缩放 ${bitmap.width}x${bitmap.height} -> ${newWidth}x${newHeight}"
-                        )
-                    }
-                    bitmap.scale(newWidth, newHeight)
-                } else {
-                    bitmap
+                if (config.enableDebugLog) {
+                    Log.d("FaceDetector", "图像缩放 ${bitmap.width}x${bitmap.height} -> ${newWidth}x${newHeight}")
                 }
+                bitmap.scale(newWidth, newHeight)
+            } else {
+                bitmap
+            }
+
             val inputImage = InputImage.fromBitmap(scaledBitmap, 0)
             val faces = detector.process(inputImage).await()
 
-            // 计算缩放比例，用于还原坐标 裁剪人脸
+            // 计算缩放比例，用于还原坐标
             val scaleX = bitmap.width.toFloat() / scaledBitmap.width
             val scaleY = bitmap.height.toFloat() / scaledBitmap.height
 
             val detectedFaces = faces.map { face ->
                 convertToDetectedFace(face, scaleX, scaleY)
             }.filter { detectedFace ->
-                // 过滤不符合要求的人脸
+                // 增强边界检查
+                isValidBoundingBox(detectedFace.boundingBox, bitmap.width, bitmap.height) &&
                 detectedFace.confidence >= config.faceDetectionConfidence &&
-                        detectedFace.isSizeValid(config.minFaceSize, config.maxFaceSize)
+                detectedFace.isSizeValid(config.minFaceSize, config.maxFaceSize)
             }
 
             val processingTime = System.currentTimeMillis() - startTime
 
+            // 确保释放缩放图
             if (scaledBitmap != bitmap) {
                 scaledBitmap.recycle()
             }
 
             if (config.enableDebugLog) {
-                Log.d(
-                    "FAceDetector",
-                    "人脸检测耗时: ${processingTime}ms, 检测到${detectedFaces.size}个人脸"
-                )
+                Log.d("FaceDetector", "人脸检测耗时: ${processingTime}ms, 检测到${detectedFaces.size}个人脸")
             }
 
             return DetectionResult(
@@ -148,9 +143,7 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
                 imageHeight = bitmap.height
             )
         } catch (e: Exception) {
-            throw FaceRecognitionException.FaceDetectionException(
-                "人脸检测失败", e
-            )
+            throw FaceRecognitionException.FaceDetectionException("人脸检测失败", e)
         }
     }
 
@@ -230,15 +223,21 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
      * 转换MLKit Face对象为DetectedFace
      */
     private fun convertToDetectedFace(face: Face, scaleX: Float, scaleY: Float): DetectedFace {
-        val originalBoundingBox = Rect(
-            (face.boundingBox.left * scaleX).toInt(),
-            (face.boundingBox.top * scaleY).toInt(),
-            (face.boundingBox.right * scaleX).toInt(),
-            (face.boundingBox.bottom * scaleY).toInt(),
-        )
+        // 确保坐标转换的精确性
+        val left = (face.boundingBox.left * scaleX).toInt()
+        val top = (face.boundingBox.top * scaleY).toInt()
+        val right = (face.boundingBox.right * scaleX).toInt()
+        val bottom = (face.boundingBox.bottom * scaleY).toInt()
+
+        val originalBoundingBox = Rect(left, top, right, bottom)
+
+        if (config.enableDebugLog) {
+            Log.d("FaceDetector", "坐标转换: 缩放图${face.boundingBox} -> 原图${originalBoundingBox}")
+        }
+
         return DetectedFace(
             boundingBox = originalBoundingBox,
-            confidence = 1.0f, // MLKit不直接提供置信度，使用默认值
+            confidence = 1.0f,
             trackingId = face.trackingId,
             rotationY = face.headEulerAngleY,
             rotationZ = face.headEulerAngleZ,
@@ -272,5 +271,17 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
                 Log.i("FaceDetector", "释放人脸检测器资源失败: ${e.message}")
             }
         }
+    }
+
+    /**
+     * 检查边界框是否有效
+     */
+    private fun isValidBoundingBox(rect: Rect, imageWidth: Int, imageHeight: Int): Boolean {
+        return rect.left >= 0 &&
+               rect.top >= 0 &&
+               rect.right <= imageWidth &&
+               rect.bottom <= imageHeight &&
+               rect.width() > 0 &&
+               rect.height() > 0
     }
 }
