@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.holder.face"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         minSdk = 21
