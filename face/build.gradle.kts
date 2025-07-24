@@ -77,8 +77,43 @@ afterEvaluate {
             create<MavenPublication>("release") {
                 group = "com.lee.face.recognition"
                 artifactId = "face"
-                version = "0.0.16"
-                afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
+                version = "0.0.17"
+
+                afterEvaluate {
+                    artifact(tasks.getByName("bundleReleaseAar"))
+                }
+
+                // 添加POM文件生成，包含依赖信息
+                pom {
+                    name.set("Face Recognition Library")
+                    description.set("Android face recognition library")
+
+                    withXml {
+                        val dependenciesNode = asNode().appendNode("dependencies")
+
+                        // 手动添加API依赖
+                        configurations.api.get().allDependencies.forEach { dep ->
+                            if (dep.group != null && dep.name != "unspecified") {
+                                val dependencyNode = dependenciesNode.appendNode("dependency")
+                                dependencyNode.appendNode("groupId", dep.group)
+                                dependencyNode.appendNode("artifactId", dep.name)
+                                dependencyNode.appendNode("version", dep.version)
+                                dependencyNode.appendNode("scope", "compile")
+                            }
+                        }
+
+                        // 添加implementation依赖
+                        configurations.implementation.get().allDependencies.forEach { dep ->
+                            if (dep.group != null && dep.name != "unspecified") {
+                                val dependencyNode = dependenciesNode.appendNode("dependency")
+                                dependencyNode.appendNode("groupId", dep.group)
+                                dependencyNode.appendNode("artifactId", dep.name)
+                                dependencyNode.appendNode("version", dep.version)
+                                dependencyNode.appendNode("scope", "runtime")
+                            }
+                        }
+                    }
+                }
             }
         }
     }

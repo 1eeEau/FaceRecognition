@@ -34,32 +34,43 @@ class FaceRecognitionManager private constructor(
 
     // 状态管理
     private var isInitialized = false
-    private val initializationScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         @Volatile
         private var INSTANCE: FaceRecognitionManager? = null
+        private var initializedConfig: FaceRecognitionConfig? = null
 
         /**
-         * 获取单例实例
+         * 初始化单例（必须在 Application 中调用）
          */
-        fun getInstance(
+        fun initialize(
             context: Context,
             config: FaceRecognitionConfig = FaceRecognitionConfig.default()
-        ): FaceRecognitionManager {
-            return INSTANCE ?: synchronized(this) {
-                val instance = FaceRecognitionManager(context.applicationContext, config)
-                INSTANCE = instance
-                instance
+        ) {
+            synchronized(this) {
+                if (INSTANCE != null) {
+                    // 已初始化时检查配置一致性
+                    require(config == initializedConfig) {
+                        "FaceRecognitionManager already initialized with different config"
+                    }
+                    return
+                }
+
+                // 创建时只保留 ApplicationContext
+                val applicationContext = context.applicationContext
+                INSTANCE = FaceRecognitionManager(applicationContext, config)
+                initializedConfig = config
             }
         }
 
         /**
-         * 清除实例 (用于测试或重新配置)
+         * 获取已初始化的单例实例
+         * @throws IllegalStateException 如果尚未初始化
          */
-        fun clearInstance() {
-            INSTANCE?.release()
-            INSTANCE = null
+        fun getInstance(): FaceRecognitionManager {
+            return INSTANCE ?: throw IllegalStateException(
+                "FaceRecognitionManager not initialized. Call initialize() first."
+            )
         }
     }
 
@@ -518,7 +529,6 @@ class FaceRecognitionManager private constructor(
                 featureExtractor.release()
             }
 
-            initializationScope.cancel()
             isInitialized = false
 
             if (config.enableDebugLog) {
