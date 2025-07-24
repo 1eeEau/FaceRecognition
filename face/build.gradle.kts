@@ -49,8 +49,8 @@ dependencies {
     api(libs.tensorflow.lite)
 
     // Room database
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
+    api(libs.androidx.room.runtime)
+    api(libs.androidx.room.ktx)
     api(libs.androidx.room.compiler)
 
 
@@ -77,7 +77,7 @@ afterEvaluate {
             create<MavenPublication>("release") {
                 group = "com.lee.face.recognition"
                 artifactId = "face"
-                version = "0.0.14"
+                version = "0.0.15"
                 afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
             }
         }
