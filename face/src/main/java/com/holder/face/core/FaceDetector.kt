@@ -12,7 +12,7 @@ import com.holder.face.exception.FaceRecognitionException
 import kotlinx.coroutines.tasks.await
 import kotlin.math.max
 import androidx.core.graphics.scale
-import com.holder.face.model.RecognitionResult
+import kotlin.math.abs
 
 /**
  * 人脸检测器
@@ -51,25 +51,15 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
      */
     data class DetectedFace(
         val boundingBox: Rect,
+        val face: Face,
         val confidence: Float,
         val trackingId: Int?,
         val rotationY: Float,
         val rotationZ: Float,
         val smilingProbability: Float?,
         val leftEyeOpenProbability: Float?,
-        val rightEyeOpenProbability: Float?
+        val rightEyeOpenProbability: Float?,
     ) {
-        /**
-         * 检查人脸质量
-         */
-        fun isGoodQuality(): Boolean {
-            return confidence >= 0.7f &&
-                    kotlin.math.abs(rotationY) < 30f &&
-                    kotlin.math.abs(rotationZ) < 30f &&
-                    (leftEyeOpenProbability ?: 1f) > 0.3f &&
-                    (rightEyeOpenProbability ?: 1f) > 0.3f
-        }
-
         /**
          * 获取人脸尺寸
          */
@@ -83,6 +73,10 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
         fun isSizeValid(minSize: Int, maxSize: Int): Boolean {
             val size = getFaceSize()
             return size in minSize..maxSize
+        }
+
+        fun isFrontalFace(maxAngle: Float = 15F): Boolean {
+            return abs(rotationY) <= maxAngle && abs(rotationZ) <= maxAngle
         }
     }
 
@@ -173,10 +167,6 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
                         "FaceRecognitionManager",
                         "检测到${detectionResult.faces.size}个人脸，选择最佳人脸进行识别"
                     )
-                    Log.i(
-                        "FaceRecognitionManager",
-                        "选中人脸大小: ${bestFace?.getFaceSize()}, 质量: ${bestFace?.isGoodQuality()}"
-                    )
                 }
                 bestFace!!
             }
@@ -205,31 +195,9 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
             }
 
             else -> {
-                val face = result.faces.first()
-                if (!face.isGoodQuality()) {
-                    if (config.enableDebugLog) {
-                        Log.i(
-                            "FaceDetector",
-                            "人脸质量较低: confidence=${face.confidence}, rotationY=${face.rotationY}, rotationZ=${face.rotationZ}"
-                        )
-                    }
-                }
-                face
+                result.faces.first()
             }
         }
-    }
-
-    /**
-     * 获取最佳质量的人脸
-     * @param bitmap 输入图像
-     * @return 质量最好的人脸，如果没有人脸则返回null
-     */
-    suspend fun getBestQualityFace(bitmap: Bitmap): DetectedFace? {
-        val result = detectFaces(bitmap)
-
-        return result.faces
-            .filter { it.isGoodQuality() }
-            .maxByOrNull { calculateFaceScore(it) }
     }
 
     /**
@@ -278,13 +246,14 @@ class FaceDetector(private val config: FaceRecognitionConfig) {
 
         return DetectedFace(
             boundingBox = originalBoundingBox,
+            face = face,
             confidence = 1.0f,
             trackingId = face.trackingId,
             rotationY = face.headEulerAngleY,
             rotationZ = face.headEulerAngleZ,
             smilingProbability = face.smilingProbability,
             leftEyeOpenProbability = face.leftEyeOpenProbability,
-            rightEyeOpenProbability = face.rightEyeOpenProbability
+            rightEyeOpenProbability = face.rightEyeOpenProbability,
         )
     }
 

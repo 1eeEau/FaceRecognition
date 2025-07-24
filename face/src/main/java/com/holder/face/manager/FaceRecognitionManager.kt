@@ -134,8 +134,16 @@ class FaceRecognitionManager private constructor(
             // 2. 人脸检测
             val detectedFace = faceDetector.detectLargestFace(bitmap)
 
+            if (!detectedFace.isFrontalFace(maxAngle = 20F)) {
+                return RecognitionResult.failure(
+                    "请保持正脸拍照",
+                    System.currentTimeMillis() - startTime
+                )
+            }
+
             // 3. 裁剪人脸区域
-            val faceBitmap = ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
+            val faceBitmap =
+                ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
 
             // 5. 提取特征
             val faceVector = featureExtractor.extractFeatures(faceBitmap, personId)
@@ -181,7 +189,6 @@ class FaceRecognitionManager private constructor(
                 extras = mapOf(
                     "recordId" to recordId,
                     "faceSize" to detectedFace.getFaceSize(),
-                    "faceQuality" to detectedFace.isGoodQuality()
                 )
             )
         } catch (e: FaceRecognitionException) {
@@ -208,9 +215,16 @@ class FaceRecognitionManager private constructor(
 
         try {
             val detectedFace = faceDetector.detectLargestFace(bitmap);
+            if (!detectedFace.isFrontalFace(maxAngle = 20F)) {
+                return RecognitionResult.failure(
+                    "请保持正脸拍照",
+                    System.currentTimeMillis() - startTime
+                )
+            }
 
             // 3. 裁剪人脸区域
-            val faceBitmap = ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
+            val faceBitmap =
+                ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
 
             // 4. 提取特征
             val queryVector = featureExtractor.extractFeatures(faceBitmap, "query")

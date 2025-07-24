@@ -110,24 +110,21 @@ class FaceComparator(private val config: FaceRecognitionConfig) {
                 }
             }
 
-            // 4. 质量加权调整
-            val qualityWeight = calculateVectorQualityWeight(vector1, vector2)
-            val adjustedSimilarity = rawSimilarity * qualityWeight
 
             // 5. 基础阈值判断
-            val isMatch = adjustedSimilarity >= config.recognitionThreshold
+            val isMatch = rawSimilarity >= config.recognitionThreshold
 
-            if (config.enableDebugLog) {
-                Log.d("FaceComparator", "向量比较详情:")
-                Log.d("FaceComparator", "  原始相似度: $rawSimilarity")
-                Log.d("FaceComparator", "  质量权重: $qualityWeight")
-                Log.d("FaceComparator", "  调整后相似度: $adjustedSimilarity")
-                Log.d("FaceComparator", "  距离: $distance")
-                Log.d("FaceComparator", "  匹配结果: $isMatch")
-            }
+//            if (config.enableDebugLog) {
+//                Log.d("FaceComparator", "向量比较详情:")
+//                Log.d("FaceComparator", "  原始相似度: $rawSimilarity")
+//                Log.d("FaceComparator", "  质量权重: $qualityWeight")
+//                Log.d("FaceComparator", "  调整后相似度: $adjustedSimilarity")
+//                Log.d("FaceComparator", "  距离: $distance")
+//                Log.d("FaceComparator", "  匹配结果: $isMatch")
+//            }
 
             return ComparisonResult(
-                similarity = adjustedSimilarity,
+                similarity = rawSimilarity,
                 distance = distance,
                 isMatch = isMatch,
                 personId = vector2.personId,
@@ -397,7 +394,10 @@ class FaceComparator(private val config: FaceRecognitionConfig) {
             // 1. 检查向量维度
             if (vector.dimension != config.featureVectorDimension) {
                 if (config.enableDebugLog) {
-                    Log.w("FaceComparator", "向量维度不匹配: ${vector.dimension} vs ${config.featureVectorDimension}")
+                    Log.w(
+                        "FaceComparator",
+                        "向量维度不匹配: ${vector.dimension} vs ${config.featureVectorDimension}"
+                    )
                 }
                 return false
             }
@@ -462,7 +462,8 @@ class FaceComparator(private val config: FaceRecognitionConfig) {
             val distributionWeight = (distWeight1 + distWeight2) / 2f
 
             // 综合权重 (范围 [0.5, 1.0])
-            weight = 0.5f + (confidenceWeight * 0.2f + normWeight * 0.2f + distributionWeight * 0.1f)
+            weight =
+                0.5f + (confidenceWeight * 0.2f + normWeight * 0.2f + distributionWeight * 0.1f)
 
             return kotlin.math.max(0.5f, kotlin.math.min(1.0f, weight))
         } catch (e: Exception) {

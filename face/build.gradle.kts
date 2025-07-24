@@ -42,7 +42,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
 
     // 人脸检测
-    implementation(libs.play.services.mlkit.text.recognition)
+    api(libs.play.services.mlkit.text.recognition)
     api(libs.face.detection)
 
     // TensorFlow Lite
@@ -51,7 +51,7 @@ dependencies {
     // Room database
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
+    api(libs.androidx.room.compiler)
 
 
     // Gson
@@ -60,7 +60,7 @@ dependencies {
     // Coroutines
     api(libs.kotlinx.coroutines.core)
     api(libs.kotlinx.coroutines.android)
-    implementation(libs.kotlinx.coroutines.play.services)
+    api(libs.kotlinx.coroutines.play.services)
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
@@ -77,7 +77,7 @@ afterEvaluate {
             create<MavenPublication>("release") {
                 group = "com.lee.face.recognition"
                 artifactId = "face"
-                version = "0.0.11"
+                version = "0.0.13"
                 afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
             }
         }
