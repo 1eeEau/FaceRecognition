@@ -117,6 +117,89 @@ class FaceRecognitionManager private constructor(
     }
 
     /**
+     * 更新人脸信息
+     * @param bitmap 人脸
+     * @param personId 人员ID
+     * @return 注册结果
+     */
+    suspend fun updateFace(bitmap: Bitmap, personId: String, remarks: String?): RecognitionResult {
+        ensureInitialized()
+        val startTime = System.currentTimeMillis()
+        val face = getFace(personId)
+            ?: return RecognitionResult.failure(
+                "找不到该人员信息",
+                System.currentTimeMillis() - startTime
+            )
+
+        try {
+            // 2. 人脸检测
+            val detectedFace = faceDetector.detectLargestFace(bitmap)
+
+            if (!detectedFace.isFrontalFace(maxAngle = 20F)) {
+                return RecognitionResult.failure(
+                    "请保持正脸拍照",
+                    System.currentTimeMillis() - startTime
+                )
+            }
+
+            // 3. 裁剪人脸区域
+            val faceBitmap =
+                ImageUtils.cropFace(bitmap, detectedFace.boundingBox)
+
+            // 5. 提取特征
+            val faceVector = featureExtractor.extractFeatures(faceBitmap, personId)
+
+            // 6. 准备图片Base64 (如果需要保存)
+            val faceImageBase64 = try {
+                ImageBase64Utils.bitmapToBase64(
+                    faceBitmap,
+                    format = Bitmap.CompressFormat.JPEG,
+                    quality = 80,
+                    maxSize = 256 // 限制图片尺寸以节省存储空间
+                )
+            } catch (e: Exception) {
+                if (config.enableDebugLog) {
+                    Log.w(
+                        "FaceRecognitionManager",
+                        "图片转Base64失败，将不保存图片: ${e.message}"
+                    )
+                }
+                null
+            }
+
+            // 7. 更新到数据库
+            val recordId = faceRepository.updateFace(faceVector, remarks, faceImageBase64)
+            val processingTime = System.currentTimeMillis() - startTime
+
+            if (config.enableDebugLog) {
+                Log.i(
+                    "FaceRecognitionManager",
+                    "人脸更新成功: personId=$personId, recordId=$recordId, time=${processingTime}ms"
+                )
+            }
+            return RecognitionResult.success(
+                personId = personId,
+                confidence = faceVector.confidence ?: 1.0f,
+                processingTime = processingTime,
+                extras = mapOf(
+                    "recordId" to recordId,
+                    "faceSize" to detectedFace.getFaceSize(),
+                )
+            )
+        } catch (e: FaceRecognitionException) {
+            return RecognitionResult.failure(
+                e.message ?: "注册失败",
+                System.currentTimeMillis() - startTime
+            )
+        } catch (e: Exception) {
+            return RecognitionResult.failure(
+                "注册过程中发生未知错误: ${e.message}",
+                System.currentTimeMillis() - startTime
+            )
+        }
+    }
+
+    /**
      * 注册人脸
      * @param bitmap 人脸图像
      * @param personId 人员ID (后端返回的ID)
@@ -160,24 +243,20 @@ class FaceRecognitionManager private constructor(
             val faceVector = featureExtractor.extractFeatures(faceBitmap, personId)
 
             // 6. 准备图片Base64 (如果需要保存)
-            val faceImageBase64 = if (saveImage) {
-                try {
-                    ImageBase64Utils.bitmapToBase64(
-                        faceBitmap,
-                        format = Bitmap.CompressFormat.JPEG,
-                        quality = 80,
-                        maxSize = 256 // 限制图片尺寸以节省存储空间
+            val faceImageBase64 = try {
+                ImageBase64Utils.bitmapToBase64(
+                    faceBitmap,
+                    format = Bitmap.CompressFormat.JPEG,
+                    quality = 80,
+                    maxSize = 256 // 限制图片尺寸以节省存储空间
+                )
+            } catch (e: Exception) {
+                if (config.enableDebugLog) {
+                    Log.w(
+                        "FaceRecognitionManager",
+                        "图片转Base64失败，将不保存图片: ${e.message}"
                     )
-                } catch (e: Exception) {
-                    if (config.enableDebugLog) {
-                        Log.w(
-                            "FaceRecognitionManager",
-                            "图片转Base64失败，将不保存图片: ${e.message}"
-                        )
-                    }
-                    null
                 }
-            } else {
                 null
             }
 

@@ -114,14 +114,12 @@ class FaceComparator(private val config: FaceRecognitionConfig) {
             // 5. 基础阈值判断
             val isMatch = rawSimilarity >= config.recognitionThreshold
 
-//            if (config.enableDebugLog) {
-//                Log.d("FaceComparator", "向量比较详情:")
-//                Log.d("FaceComparator", "  原始相似度: $rawSimilarity")
-//                Log.d("FaceComparator", "  质量权重: $qualityWeight")
-//                Log.d("FaceComparator", "  调整后相似度: $adjustedSimilarity")
-//                Log.d("FaceComparator", "  距离: $distance")
-//                Log.d("FaceComparator", "  匹配结果: $isMatch")
-//            }
+            if (config.enableDebugLog) {
+                Log.d("FaceComparator", "向量比较详情:")
+                Log.d("FaceComparator", "  原始相似度: $rawSimilarity")
+                Log.d("FaceComparator", "  距离: $distance")
+                Log.d("FaceComparator", "  匹配结果: $isMatch")
+            }
 
             return ComparisonResult(
                 similarity = rawSimilarity,

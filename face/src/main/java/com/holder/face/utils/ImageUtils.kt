@@ -87,7 +87,6 @@ object ImageUtils {
      * @return 裁剪后的人脸图像
      */
     fun cropFace(bitmap: Bitmap, faceRect: Rect, padding: Float = 0.05f): Bitmap {
-        Log.w("cropFace", "开始降级裁剪")
         try {
             val paddingX = (faceRect.width() * padding).toInt()
             val paddingY = (faceRect.height() * padding).toInt()
