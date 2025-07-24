@@ -1,6 +1,3 @@
-import com.android.build.gradle.internal.utils.createPublishingInfoForApp
-import org.jetbrains.kotlin.load.kotlin.signatures
-
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -10,6 +7,7 @@ plugins {
 
 android {
     namespace = "com.holder.face"
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 21
@@ -19,10 +17,10 @@ android {
     }
 
     buildTypes {
-        getByName("release") {
+        release {
             proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
         }
-        getByName("debug") {
+        debug {
             proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
         }
     }
@@ -74,45 +72,10 @@ afterEvaluate {
     publishing {
         publications {
             create<MavenPublication>("release") {
-                group = "com.lee.face.recognition"
+                group = "com.holder.face"
                 artifactId = "face"
                 version = "0.0.18"
-
-                afterEvaluate {
-                    artifact(tasks.getByName("bundleReleaseAar"))
-                }
-
-                // 添加POM文件生成，包含依赖信息
-                pom {
-                    name.set("Face Recognition Library")
-                    description.set("Android face recognition library")
-
-                    withXml {
-                        val dependenciesNode = asNode().appendNode("dependencies")
-
-                        // 手动添加API依赖
-                        configurations.api.get().allDependencies.forEach { dep ->
-                            if (dep.group != null && dep.name != "unspecified") {
-                                val dependencyNode = dependenciesNode.appendNode("dependency")
-                                dependencyNode.appendNode("groupId", dep.group)
-                                dependencyNode.appendNode("artifactId", dep.name)
-                                dependencyNode.appendNode("version", dep.version)
-                                dependencyNode.appendNode("scope", "compile")
-                            }
-                        }
-
-                        // 添加implementation依赖
-                        configurations.implementation.get().allDependencies.forEach { dep ->
-                            if (dep.group != null && dep.name != "unspecified") {
-                                val dependencyNode = dependenciesNode.appendNode("dependency")
-                                dependencyNode.appendNode("groupId", dep.group)
-                                dependencyNode.appendNode("artifactId", dep.name)
-                                dependencyNode.appendNode("version", dep.version)
-                                dependencyNode.appendNode("scope", "runtime")
-                            }
-                        }
-                    }
-                }
+                afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
             }
         }
     }
