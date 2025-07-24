@@ -51,7 +51,7 @@ dependencies {
     // Room database
     api(libs.androidx.room.runtime)
     api(libs.androidx.room.ktx)
-    api(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)
 
 
     // Gson
