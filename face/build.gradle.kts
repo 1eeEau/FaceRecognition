@@ -39,15 +39,15 @@ dependencies {
     implementation(libs.androidx.appcompat)
 
     // 人脸检测
-    api(libs.play.services.mlkit.text.recognition)
-    api(libs.face.detection)
+    implementation(libs.play.services.mlkit.text.recognition)
+    implementation(libs.face.detection)
 
     // TensorFlow Lite
-    api(libs.tensorflow.lite)
+    implementation(libs.tensorflow.lite)
 
     // Room database
-    api(libs.androidx.room.runtime)
-    api(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
 
@@ -55,9 +55,9 @@ dependencies {
     implementation(libs.gson)
 
     // Coroutines
-    api(libs.kotlinx.coroutines.core)
-    api(libs.kotlinx.coroutines.android)
-    api(libs.kotlinx.coroutines.play.services)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
@@ -75,7 +75,7 @@ afterEvaluate {
                 group = "com.holder.face"
                 artifactId = "face"
                 version = "0.0.18"
-                afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
+                from(components["release"])
             }
         }
     }
