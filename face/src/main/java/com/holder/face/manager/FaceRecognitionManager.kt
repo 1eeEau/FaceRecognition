@@ -521,17 +521,30 @@ class FaceRecognitionManager private constructor(
     /**
      * 获取人脸图片
      * @param personId 人员ID
-     * @return 人脸图片Bitmap，如果不存在返回null
+     * @return 人脸图片Base64字符串 如果不存在返回null
      */
-    suspend fun getFaceImage(personId: String): Bitmap? {
+    suspend fun getFaceImageBase64(personId: String): String? {
         ensureInitialized()
         return try {
-            val base64 = faceRepository.getFaceImage(personId)
-            if (base64 != null) {
-                com.holder.face.utils.ImageBase64Utils.base64ToBitmap(base64)
-            } else {
-                null
+            faceRepository.getFaceImage(personId)
+        } catch (e: Exception) {
+            if (config.enableDebugLog) {
+                Log.e("FaceRecognitionManager", "获取人脸图片失败: ${e.message}")
             }
+            null
+        }
+    }
+
+    /**
+     * 获取人脸Bitmap
+     * @param personId 人员图片
+     * @return 人脸Bitmap
+     */
+    suspend fun getFaceImageBitmap(personId: String): Bitmap? {
+        ensureInitialized()
+        return try {
+            val faceImage = faceRepository.getFaceImage(personId) ?: return null
+            ImageBase64Utils.base64ToBitmap(faceImage)
         } catch (e: Exception) {
             if (config.enableDebugLog) {
                 Log.e("FaceRecognitionManager", "获取人脸图片失败: ${e.message}")

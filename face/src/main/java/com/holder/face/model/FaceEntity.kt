@@ -21,39 +21,39 @@ data class FaceEntity(
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
     val id: Long = 0,
-    
+
     /** 人员ID (后端返回的ID，不做自增维护) */
     @ColumnInfo(name = "person_id")
     val personId: String,
-    
+
     /** 特征向量 (存储为字节数组) */
     @ColumnInfo(name = "vector_data", typeAffinity = ColumnInfo.BLOB)
     val vectorData: ByteArray,
-    
+
     /** 向量维度 */
     @ColumnInfo(name = "vector_dimension")
     val vectorDimension: Int,
-    
+
     /** 存储时间 */
     @ColumnInfo(name = "created_time")
     val createdTime: Date,
-    
+
     /** 最后更新时间 */
     @ColumnInfo(name = "updated_time")
     val updatedTime: Date = createdTime,
-    
+
     /** 置信度 (可选) */
     @ColumnInfo(name = "confidence")
     val confidence: Float? = null,
-    
+
     /** 备注信息 */
     @ColumnInfo(name = "remarks")
     val remarks: String? = null,
-    
+
     /** 是否启用 */
     @ColumnInfo(name = "is_enabled")
     val isEnabled: Boolean = true,
-    
+
     /** 版本号 (用于数据同步) */
     @ColumnInfo(name = "version")
     val version: Int = 1,
@@ -62,7 +62,7 @@ data class FaceEntity(
     @ColumnInfo(name = "face_image_base64")
     val faceImageBase64: String? = null
 ) {
-    
+
     companion object {
         /**
          * 从FaceVector创建FaceEntity
@@ -86,7 +86,7 @@ data class FaceEntity(
             )
         }
     }
-    
+
     /**
      * 转换为FaceVector
      */
@@ -95,9 +95,9 @@ data class FaceEntity(
             personId = personId,
             byteArray = vectorData,
             createdTime = createdTime
-        ).copy(confidence = confidence)
+        ).copy(confidence = confidence, originFaceEntity = this)
     }
-    
+
     /**
      * 更新向量数据
      */
@@ -110,7 +110,7 @@ data class FaceEntity(
             version = version + 1
         )
     }
-    
+
     /**
      * 启用/禁用
      */
@@ -121,7 +121,7 @@ data class FaceEntity(
             version = version + 1
         )
     }
-    
+
     /**
      * 更新备注
      */
@@ -143,7 +143,7 @@ data class FaceEntity(
             version = version + 1
         )
     }
-    
+
     /**
      * 检查数据是否有效
      */
@@ -153,7 +153,7 @@ data class FaceEntity(
                 vectorDimension > 0 &&
                 vectorData.size == vectorDimension * 4 // 每个float占4字节
     }
-    
+
     /**
      * 获取存储大小 (字节)
      */
@@ -182,13 +182,13 @@ data class FaceEntity(
             0
         }
     }
-    
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
-        
+
         other as FaceEntity
-        
+
         if (id != other.id) return false
         if (personId != other.personId) return false
         if (!vectorData.contentEquals(other.vectorData)) return false
@@ -200,10 +200,10 @@ data class FaceEntity(
         if (isEnabled != other.isEnabled) return false
         if (version != other.version) return false
         if (faceImageBase64 != other.faceImageBase64) return false
-        
+
         return true
     }
-    
+
     override fun hashCode(): Int {
         var result = id.hashCode()
         result = 31 * result + personId.hashCode()
@@ -218,7 +218,7 @@ data class FaceEntity(
         result = 31 * result + (faceImageBase64?.hashCode() ?: 0)
         return result
     }
-    
+
     override fun toString(): String {
         return "FaceEntity(id=$id, personId='$personId', vectorDimension=$vectorDimension, " +
                 "createdTime=$createdTime, updatedTime=$updatedTime, confidence=$confidence, " +
