@@ -126,11 +126,7 @@ class FaceRecognitionManager private constructor(
         ensureInitialized()
         val startTime = System.currentTimeMillis()
         val face = getFace(personId)
-            ?: return RecognitionResult.failure(
-                "找不到该人员信息",
-                System.currentTimeMillis() - startTime
-            )
-
+            ?: return registerFace(bitmap, personId)    // 找不到该人员则直接进入注册逻辑
         try {
             // 2. 人脸检测
             val detectedFace = faceDetector.detectLargestFace(bitmap)
@@ -244,10 +240,7 @@ class FaceRecognitionManager private constructor(
             // 6. 准备图片Base64 (如果需要保存)
             val faceImageBase64 = try {
                 ImageBase64Utils.bitmapToBase64(
-                    bitmap,
-                    format = Bitmap.CompressFormat.JPEG,
-                    quality = 80,
-                    maxSize = 256 // 限制图片尺寸以节省存储空间
+                    bitmap
                 )
             } catch (e: Exception) {
                 if (config.enableDebugLog) {
