@@ -211,7 +211,6 @@ class FaceRecognitionManager private constructor(
         bitmap: Bitmap,
         personId: String,
         remarks: String? = null,
-        saveImage: Boolean = true
     ): RecognitionResult {
         ensureInitialized()
         val startTime = System.currentTimeMillis()
@@ -245,7 +244,7 @@ class FaceRecognitionManager private constructor(
             // 6. 准备图片Base64 (如果需要保存)
             val faceImageBase64 = try {
                 ImageBase64Utils.bitmapToBase64(
-                    faceBitmap,
+                    bitmap,
                     format = Bitmap.CompressFormat.JPEG,
                     quality = 80,
                     maxSize = 256 // 限制图片尺寸以节省存储空间
