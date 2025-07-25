@@ -74,7 +74,7 @@ afterEvaluate {
             create<MavenPublication>("release") {
                 group = "com.holder.face"
                 artifactId = "face"
-                version = "0.0.24"
+                version = "0.0.25"
                 from(components["release"])
             }
         }
